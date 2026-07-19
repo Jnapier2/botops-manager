@@ -4434,7 +4434,7 @@ def run_stop_script(bot: BotRecord, cfg: Dict[str, Any], assume_yes: bool = Fals
             if not inventory_verified:
                 print("Stop script was launched, but Windows process inventory was unavailable; ownership was preserved and completion could not be verified.")
                 return True
-            print(f"Stop script was launched. A matching process is still visible; review the dashboard before forcing termination.")
+            print("Stop script was launched. A matching process is still visible; review the dashboard before forcing termination.")
             return True
     except Exception as exc:
         log_event(f"Stop script failed for {bot.name}: {exc}", "ERROR")

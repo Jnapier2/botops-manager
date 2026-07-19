@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import copy
 import json
-import logging
 import os
 import sys
 import tempfile
@@ -1705,13 +1704,13 @@ class ControlBoundaryTests(IsolatedAppMixin, unittest.TestCase):
 
     def test_force_stop_refuses_observed_unowned_process(self) -> None:
         bot = self.make_bot()
+        cfg = self.config_for(self.base)
         observed = bm.ProcessInfo(
             99,
             "cmd.exe",
             command_line=f'cmd /k call "{bot.launcher}"',
             creation_time=100.0,
         )
-        cfg = self.config_for(self.base)
         with mock.patch.object(bm, "is_windows_host", return_value=True), mock.patch.object(
             bm, "get_processes", return_value=self.complete_inventory(observed, self.manager_process())
         ), mock.patch.object(bm, "read_runtime_state", return_value={"bots": {}}), mock.patch.object(
@@ -2086,7 +2085,6 @@ class LauncherExportHotfixTests(IsolatedAppMixin, unittest.TestCase):
     def test_python_launcher_uses_bot_venv_first_then_py_launcher_not_manager_venv(self) -> None:
         folder = self.base / "PyBot"
         folder.mkdir()
-        cfg = self.config_for(self.base)
         with mock.patch.object(bm, "is_windows_host", return_value=True), mock.patch.object(
             bm.shutil, "which", side_effect=lambda name: "C:/Windows/py.exe" if name == "py.exe" else None
         ), mock.patch.object(bm.sys, "executable", r"C:\Bots\OtherBot\.venv\Scripts\python.exe"):
