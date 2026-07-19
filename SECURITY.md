@@ -12,4 +12,4 @@ Include the affected version, operating system, reproduction steps, expected bou
 
 ## Operational boundary
 
-BotOps Manager does not need child-project credentials. Keep secrets outside this repository and outside support exports. Review every launcher before enabling control, and use monitor-only mode for processes BotOps did not start. Force termination is disabled in the public edition; use only reviewed, project-scoped stop scripts.
+BotOps Manager does not need child-project credentials. Keep secrets outside this repository and outside support exports. Review every launcher before enabling control, and use monitor-only mode for processes BotOps did not start. Force termination is disabled; use only reviewed, project-scoped stop scripts.

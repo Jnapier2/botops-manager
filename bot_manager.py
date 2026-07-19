@@ -4,8 +4,8 @@
 The manager does not read child-project credentials, contact external services
 on their behalf, or edit their source and configuration. Automatic launcher
 detection blocks stop, setup, build, cleanup, and export scripts from being
-selected as start commands. Force termination is deliberately disabled in the
-public edition; reviewed project-scoped stop scripts remain explicit actions.
+selected as start commands. Force termination is deliberately disabled;
+reviewed project-scoped stop scripts remain explicit actions.
 
 Copyright © 2026 Gateway Information Group LLC. All rights reserved.
 """
@@ -859,14 +859,6 @@ def read_bounded_regular_bytes(path: Path, max_bytes: int) -> bytes:
 def read_bounded_json(path: Path, max_bytes: int) -> Any:
     payload = read_bounded_regular_bytes(path, max_bytes)
     return json.loads(payload.decode("utf-8"))
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def safe_filename(value: str) -> str:
@@ -1880,15 +1872,6 @@ def detect_launcher(folder: Path, cfg: Dict[str, Any]) -> Tuple[str, str]:
     return "", "none"
 
 
-def detect_stop_launcher(folder: Path, cfg: Dict[str, Any]) -> Tuple[str, str]:
-    _, stops = audit_launcher_candidates(folder, cfg)
-    minimum = int(cfg.get("min_stop_score", 50))
-    for candidate in stops:
-        if not candidate.blocked and candidate.score >= minimum:
-            return candidate.path, candidate.kind
-    return "", "none"
-
-
 def folder_looks_like_bot(folder: Path, cfg: Dict[str, Any], scan_errors: Optional[List[str]] = None) -> bool:
     if not directory_is_safe_within(folder, folder):
         if scan_errors is not None:
@@ -2753,13 +2736,6 @@ def track_bot(bot: BotRecord, processes: Sequence[ProcessInfo], *, cleanup_stale
     return TrackingResult(managed, managed_roots, observed, observed_roots, confidence, reasons)
 
 
-def related_processes(bot: BotRecord, processes: Sequence[ProcessInfo]) -> List[ProcessInfo]:
-    """Compatibility helper; monitoring may include managed plus observed processes."""
-    tracking = track_bot(bot, processes, cleanup_stale=False)
-    combined = {process.pid: process for process in tracking.managed_processes + tracking.observed_processes}
-    return sorted(combined.values(), key=lambda item: item.pid)
-
-
 def health_candidate_family(path: Path, bot_path: Path) -> str:
     """Return a stable key across rotations and common sharded latest logs."""
     try:
@@ -3535,13 +3511,6 @@ def assess_health_evidence(
     )
 
 
-def find_recent_logs(bot_path: Path, cfg: Dict[str, Any]) -> List[Path]:
-    candidates = find_log_candidates(bot_path, cfg)
-    reliable = [candidate for candidate in candidates if candidate.reliable]
-    reliable.sort(key=lambda item: (-(item.mtime or 0), -item.score))
-    return [Path(candidate.path) for candidate in reliable]
-
-
 def runtime_start_age_minutes(bot_name: str, now: float) -> Optional[float]:
     state = read_runtime_state()
     entry = state.get("bots", {}).get(bot_name, {}) if isinstance(state.get("bots"), dict) else {}
@@ -3922,7 +3891,7 @@ def build_path_targeting_report(cfg: Dict[str, Any], bots: Optional[Dict[str, Bo
 def dashboard_text(cfg: Dict[str, Any], statuses: Sequence[BotStatus]) -> str:
     root = str(cfg.get("bots_root", DEFAULT_BOTS_ROOT))
     lines: List[str] = [
-        f"{APP_NAME} v{APP_VERSION} | root: {root} | force termination: disabled in public edition",
+        f"{APP_NAME} v{APP_VERSION} | root: {root} | force termination: disabled",
         f"Generated: {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
     ]
     location_warning = install_location_warning()
@@ -4222,12 +4191,6 @@ def build_runner_command_path(path: Path, kind: str, bot_path: Path, cfg: Dict[s
     if kind == "batch":
         return f"call {quoted}"
     return quoted
-
-
-def build_runner_command(bot: BotRecord, cfg: Optional[Dict[str, Any]] = None) -> str:
-    if not bot.launcher:
-        raise ValueError("No start launcher is configured.")
-    return build_runner_command_path(Path(bot.launcher), bot.launcher_kind, Path(bot.path), cfg or DEFAULT_CONFIG)
 
 
 def revalidate_control_launcher(
@@ -4546,7 +4509,7 @@ def adopt_bot(bot: BotRecord, cfg: Dict[str, Any], assume_yes: bool = False) -> 
 def force_stop_bot(bot: BotRecord, cfg: Dict[str, Any], assume_yes: bool = False) -> bool:
     del bot, cfg, assume_yes
     print(
-        "Force termination is deliberately disabled in the public portfolio edition. "
+        "Force termination is deliberately disabled. "
         "Use a reviewed, project-scoped stop script or stop the process through Windows directly."
     )
     return False
@@ -5745,7 +5708,7 @@ def build_support_export_plan(
             "source": "config default enforced at load",
             "effective_value": "identity_tracked_monitoring_with_force_termination_disabled",
             "status": "recognized_validated_mapped",
-            "expected_effect": "no BotOps path can force-terminate a process in the public edition",
+            "expected_effect": "no BotOps path can force-terminate a process",
         },
         "config": config_input_assurance(cfg),
     }

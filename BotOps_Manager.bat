@@ -44,7 +44,7 @@ if defined BOTOPS_BOTS_ROOT (
     set "BOTOPS_DISPLAY_ROOT=C:\Bots"
 )
 echo Root monitored: %BOTOPS_DISPLAY_ROOT%
-echo Force termination: disabled in the public portfolio edition
+echo Force termination: disabled
 echo Retarget root: set BOTOPS_BOTS_ROOT before launch, or edit state\bot_manager_config.json
 echo.
 echo   1  Dashboard / current status

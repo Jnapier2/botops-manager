@@ -17,7 +17,7 @@ BotOps Manager turns a directory of separately launched tools into one observabl
 
 BotOps is monitor-only for externally started processes by default. It does not read child-project credentials, call external services on their behalf, edit their source or configuration, install persistence, weaken endpoint protection, or restart a project automatically.
 
-Start and stop-script actions are explicit and confirmation-gated. Duplicate checks require an explicitly complete Windows process inventory. BotOps records start ownership only when the launched process remains live and the same PID and creation identity are verified both immediately and after the settle window. Force termination is deliberately disabled in this public edition because a persisted PID alone cannot eliminate Windows process-reuse and time-of-check/time-of-use risk.
+Start and stop-script actions are explicit and confirmation-gated. Duplicate checks require an explicitly complete Windows process inventory. BotOps records start ownership only when the launched process remains live and the same PID and creation identity are verified both immediately and after the settle window. Force termination is deliberately disabled because a persisted PID alone cannot eliminate Windows process-reuse and time-of-check/time-of-use risk.
 
 ## Quick start
 
@@ -52,9 +52,5 @@ python -m unittest discover -s tests -v
 ```
 
 The deterministic suite uses synthetic folders and mocked process inventories. It does not start child automation, contact network services, or modify system security settings.
-
-## Portfolio context
-
-This public edition excludes private builds, cloud-folder mappings, real operational project names, binaries, runtime state, logs, and generated support bundles. The repository demonstrates defensive local orchestration, evidence-ranked health monitoring, redaction, bounded recovery, and fail-closed control boundaries.
 
 Copyright © 2026 Gateway Information Group LLC. All rights reserved. See [LICENSE.md](LICENSE.md).
