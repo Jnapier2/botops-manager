@@ -1,5 +1,5 @@
 @echo off
-REM Asset metadata: ID BOTOPS-LAUNCHER; class launcher; role primary-launcher; status current; sensitivity project-internal; tags botops-manager,windows,batch,asset-metadata.
+REM Copyright 2026 Gateway Information Group LLC. All rights reserved.
 setlocal EnableExtensions DisableDelayedExpansion
 cd /d "%~dp0"
 title BotOps Manager v1.13.0
@@ -44,7 +44,7 @@ if defined BOTOPS_BOTS_ROOT (
     set "BOTOPS_DISPLAY_ROOT=C:\Bots"
 )
 echo Root monitored: %BOTOPS_DISPLAY_ROOT%
-echo Force-stop scope: identity-verified managed/adopted process trees only
+echo Force termination: disabled in the public portfolio edition
 echo Retarget root: set BOTOPS_BOTS_ROOT before launch, or edit state\bot_manager_config.json
 echo.
 echo   1  Dashboard / current status
@@ -52,7 +52,7 @@ echo   2  Full interactive bot manager
 echo   3  Rescan + launcher safety audit
 echo   4  Live dashboard ^(Ctrl+C returns here^)
 echo   5  Preflight / self-test
-echo   6  Export safe diagnostic ZIP
+echo   6  Export safe support ZIP
 echo   7  Open monitored root
 echo   8  Open manager logs
 echo   9  Show config, state, metrics, and export paths

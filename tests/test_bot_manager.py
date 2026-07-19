@@ -1,4 +1,4 @@
-# Asset metadata: ID BOTOPS-TESTS; class diagnostic; role regression-tests; status current; sensitivity project-internal; tags botops-manager,tests,safety,asset-metadata.
+# Copyright 2026 Gateway Information Group LLC. All rights reserved.
 from __future__ import annotations
 
 import copy
@@ -29,7 +29,7 @@ class IsolatedAppMixin:
         self.manager_root.mkdir()
         self.app_patch = mock.patch.object(bm, "app_root", return_value=self.manager_root)
         self.app_patch.start()
-        bm._PROCESS_CACHE = (0.0, [])
+        bm._PROCESS_CACHE = (0.0, bm.ProcessInventory())
         bm._LOG_CANDIDATE_CACHE.clear()
         if bm._LOGGER is not None:
             for handler in list(bm._LOGGER.handlers):
@@ -53,86 +53,89 @@ class IsolatedAppMixin:
         cfg["process_cache_seconds"] = 0
         return cfg
 
+    def complete_inventory(self, *processes: bm.ProcessInfo) -> bm.ProcessInventory:
+        return bm.ProcessInventory(processes, complete=True, source="test-complete")
+
 
 class LauncherSafetyTests(IsolatedAppMixin, unittest.TestCase):
     def test_unsafe_start_scripts_are_blocked_and_stop_is_separate(self) -> None:
-        folder = self.base / "Coinbase_Full Perp Spreadbot"
+        folder = self.base / "PolicyService_Production"
         folder.mkdir()
         for name in (
-            "EMERGENCY_STOP_COINBASE_PERP_BOT.bat",
-            "RUN_EXPORT_TO_CHATGPT.bat",
-            "build_coinbase_bot.bat",
-            "start_live_trader.bat",
+            "EMERGENCY_STOP_POLICY_SERVICE.bat",
+            "RUN_EXPORT_TO_SUPPORT.bat",
+            "build_policy_service_bot.bat",
+            "start_primary_worker.bat",
         ):
             (folder / name).write_text("@echo off\n", encoding="utf-8")
 
         starts, stops = bm.audit_launcher_candidates(folder, self.config_for(self.base))
         selected = next(item for item in starts if not item.blocked and item.score >= 35)
-        self.assertEqual(Path(selected.path).name, "start_live_trader.bat")
+        self.assertEqual(Path(selected.path).name, "start_primary_worker.bat")
 
         emergency_start = next(item for item in starts if "EMERGENCY_STOP" in item.path)
         self.assertTrue(emergency_start.blocked)
         selected_stop = next(item for item in stops if not item.blocked and item.score >= 50)
-        self.assertEqual(Path(selected_stop.path).name, "EMERGENCY_STOP_COINBASE_PERP_BOT.bat")
+        self.assertEqual(Path(selected_stop.path).name, "EMERGENCY_STOP_POLICY_SERVICE.bat")
 
-    def test_ckpool_build_script_loses_to_runtime_executable(self) -> None:
-        folder = self.base / "CKPool_GPU_Bot_Package"
+    def test_native_worker_build_script_loses_to_runtime_executable(self) -> None:
+        folder = self.base / "NativeWorkerPackage"
         folder.mkdir()
-        (folder / "build_solo_ckpool_miner.bat").write_text("@echo off\n", encoding="utf-8")
-        (folder / "solo_ckpool_miner.exe").write_bytes(b"MZ")
+        (folder / "build_native_worker.bat").write_text("@echo off\n", encoding="utf-8")
+        (folder / "native_worker.exe").write_bytes(b"MZ")
 
         path, kind = bm.detect_launcher(folder, self.config_for(self.base))
-        self.assertEqual(Path(path).name, "solo_ckpool_miner.exe")
+        self.assertEqual(Path(path).name, "native_worker.exe")
         self.assertEqual(kind, "executable")
 
-    def test_neutral_kraken_launcher_matches_folder_name(self) -> None:
-        folder = self.base / "KrakenBot"
+    def test_neutral_data_worker_launcher_matches_folder_name(self) -> None:
+        folder = self.base / "DataWorker"
         folder.mkdir()
-        (folder / "kraken.bat").write_text("@echo off\n", encoding="utf-8")
+        (folder / "worker_console.bat").write_text("@echo off\n", encoding="utf-8")
 
         path, kind = bm.detect_launcher(folder, self.config_for(self.base))
-        self.assertEqual(Path(path).name, "kraken.bat")
+        self.assertEqual(Path(path).name, "worker_console.bat")
         self.assertEqual(kind, "batch")
 
 
-    def test_kraken_common_module_is_not_preferred_over_bat_control(self) -> None:
-        folder = self.base / "KrakenBot"
+    def test_data_worker_common_module_is_not_preferred_over_bat_control(self) -> None:
+        folder = self.base / "DataWorker"
         folder.mkdir()
-        (folder / "kraken_bot_common.py").write_text("# shared helpers only\n", encoding="utf-8")
-        (folder / "kraken.bat").write_text("@echo off\n", encoding="utf-8")
+        (folder / "data_worker_bot_common.py").write_text("# shared helpers only\n", encoding="utf-8")
+        (folder / "worker_console.bat").write_text("@echo off\n", encoding="utf-8")
 
         starts, _ = bm.audit_launcher_candidates(folder, self.config_for(self.base))
-        common = next(item for item in starts if Path(item.path).name == "kraken_bot_common.py")
+        common = next(item for item in starts if Path(item.path).name == "data_worker_bot_common.py")
         self.assertTrue(common.blocked)
         path, kind = bm.detect_launcher(folder, self.config_for(self.base))
-        self.assertEqual(Path(path).name, "kraken.bat")
+        self.assertEqual(Path(path).name, "worker_console.bat")
         self.assertEqual(kind, "batch")
 
     def test_collection_folder_is_split_into_nested_bots_not_mixed_launcher_scope(self) -> None:
         bots_root = self.base / "Bots"
-        xmr = bots_root / "Miners" / "xmr"
-        cfx = bots_root / "Miners" / "Cfx"
-        xmr.mkdir(parents=True)
-        cfx.mkdir(parents=True)
-        (xmr / "miner_status.ps1").write_text("# status only\n", encoding="utf-8")
-        (xmr / "start_xmr_miner.bat").write_text("@echo off\n", encoding="utf-8")
-        (cfx / "start-miner.bat").write_text("@echo off\n", encoding="utf-8")
-        (cfx / "stop-miner.bat").write_text("@echo off\n", encoding="utf-8")
+        alpha = bots_root / "Workers" / "Alpha"
+        beta = bots_root / "Workers" / "Beta"
+        alpha.mkdir(parents=True)
+        beta.mkdir(parents=True)
+        (alpha / "worker_status.ps1").write_text("# status only\n", encoding="utf-8")
+        (alpha / "start_alpha_worker.bat").write_text("@echo off\n", encoding="utf-8")
+        (beta / "start-worker.bat").write_text("@echo off\n", encoding="utf-8")
+        (beta / "stop-worker.bat").write_text("@echo off\n", encoding="utf-8")
 
         bots = bm.scan_bots(self.config_for(bots_root), save=False)
-        self.assertNotIn("Miners", bots)
-        self.assertIn("Miners__xmr", bots)
-        self.assertIn("Miners__Cfx", bots)
-        self.assertEqual(Path(bots["Miners__xmr"].launcher).name, "start_xmr_miner.bat")
-        self.assertEqual(Path(bots["Miners__Cfx"].launcher).name, "start-miner.bat")
-        self.assertEqual(Path(bots["Miners__Cfx"].stop_launcher).name, "stop-miner.bat")
+        self.assertNotIn("Workers", bots)
+        self.assertIn("Workers__Alpha", bots)
+        self.assertIn("Workers__Beta", bots)
+        self.assertEqual(Path(bots["Workers__Alpha"].launcher).name, "start_alpha_worker.bat")
+        self.assertEqual(Path(bots["Workers__Beta"].launcher).name, "start-worker.bat")
+        self.assertEqual(Path(bots["Workers__Beta"].stop_launcher).name, "stop-worker.bat")
 
     def test_nested_stop_from_different_child_scope_is_not_auto_selected(self) -> None:
-        folder = self.base / "Miners"
-        (folder / "xmr").mkdir(parents=True)
-        (folder / "Cfx").mkdir(parents=True)
-        (folder / "xmr" / "start_xmr_miner.bat").write_text("@echo off\n", encoding="utf-8")
-        (folder / "Cfx" / "stop-miner.bat").write_text("@echo off\n", encoding="utf-8")
+        folder = self.base / "Workers"
+        (folder / "Alpha").mkdir(parents=True)
+        (folder / "Beta").mkdir(parents=True)
+        (folder / "Alpha" / "start_alpha_worker.bat").write_text("@echo off\n", encoding="utf-8")
+        (folder / "Beta" / "stop-worker.bat").write_text("@echo off\n", encoding="utf-8")
         starts, stops = bm.audit_launcher_candidates(folder, self.config_for(self.base))
         safe_auto = next(item for item in starts if not item.blocked and item.score >= 60)
         safe_stop = next(
@@ -148,7 +151,7 @@ class LauncherSafetyTests(IsolatedAppMixin, unittest.TestCase):
         self.assertIsNone(safe_stop)
 
     def test_package_json_with_start_script_is_allowed_and_uses_prefix(self) -> None:
-        folder = self.base / "NodeTrader"
+        folder = self.base / "NodeWorker"
         package_dir = folder / "ui"
         package_dir.mkdir(parents=True)
         package = package_dir / "package.json"
@@ -162,7 +165,7 @@ class LauncherSafetyTests(IsolatedAppMixin, unittest.TestCase):
         self.assertIn(str(package_dir), command)
 
     def test_package_json_without_start_script_is_blocked(self) -> None:
-        folder = self.base / "NodeTrader"
+        folder = self.base / "NodeWorker"
         folder.mkdir()
         package = folder / "package.json"
         package.write_text(json.dumps({"scripts": {"test": "echo test"}}), encoding="utf-8")
@@ -202,9 +205,9 @@ class LauncherSafetyTests(IsolatedAppMixin, unittest.TestCase):
 
 
     def test_broad_local_bots_stop_script_is_not_auto_selected(self) -> None:
-        folder = self.base / "Coinbase-bot"
+        folder = self.base / "PolicyService-bot"
         folder.mkdir()
-        (folder / "START_HERE_COINBASE_BOT.bat").write_text("@echo off\n", encoding="utf-8")
+        (folder / "START_HERE_POLICY_BOT.bat").write_text("@echo off\n", encoding="utf-8")
         (folder / "R289_STOP_LOCAL_BOTS_AND_CLEAN_LOCKS.bat").write_text("@echo off\n", encoding="utf-8")
 
         starts, _ = bm.audit_launcher_candidates(folder, self.config_for(self.base))
@@ -213,41 +216,41 @@ class LauncherSafetyTests(IsolatedAppMixin, unittest.TestCase):
         self.assertIn("blocked stop terms", "; ".join(broad_stop.reasons))
         self.assertTrue(any(not item.blocked for item in starts))
 
-    def test_position_exit_and_reconciliation_are_not_auto_stop_handlers(self) -> None:
-        folder = self.base / "Coinbase_Full Perp Spreadbot"
+    def test_task_exit_and_reconciliation_are_not_auto_stop_handlers(self) -> None:
+        folder = self.base / "PolicyService_Production"
         folder.mkdir()
-        for name in ("active_position_exit.py", "coinbase_post_stop_open_order_reconciliation.py"):
+        for name in ("active_task_exit.py", "policy_service_post_stop_reconciliation.py"):
             (folder / name).write_text("# not a process-control stop script\n", encoding="utf-8")
 
-        active = bm.score_stop_candidate(folder / "active_position_exit.py", folder, self.config_for(self.base))
-        reconciliation = bm.score_stop_candidate(folder / "coinbase_post_stop_open_order_reconciliation.py", folder, self.config_for(self.base))
+        active = bm.score_stop_candidate(folder / "active_task_exit.py", folder, self.config_for(self.base))
+        reconciliation = bm.score_stop_candidate(folder / "policy_service_post_stop_reconciliation.py", folder, self.config_for(self.base))
         self.assertTrue(active.blocked)
         self.assertTrue(reconciliation.blocked)
 
-    def test_kalshi_folders_are_trade_category_not_unknown(self) -> None:
-        folder = self.base / "kalshi_15m_buy_bot_Rebuild"
+    def test_schedule_worker_folders_are_worker_category_not_unknown(self) -> None:
+        folder = self.base / "schedule_worker_15m_rebuild"
         folder.mkdir()
-        (folder / "kalshi_15m_buy_bot_v67.py").write_text("# bot\n", encoding="utf-8")
+        (folder / "schedule_worker_15m_v67.py").write_text("# worker\n", encoding="utf-8")
         bots = bm.scan_bots(self.config_for(self.base), save=False)
-        self.assertEqual(bots["kalshi_15m_buy_bot_Rebuild"].category, "trade")
+        self.assertEqual(bots["schedule_worker_15m_rebuild"].category, "worker")
 
-    def test_kalshi_command_center_bat_wins_over_raw_engine(self) -> None:
-        folder = self.base / "kalshi_15m_buy_bot"
+    def test_schedule_worker_command_center_bat_wins_over_raw_engine(self) -> None:
+        folder = self.base / "schedule_worker_15m"
         folder.mkdir()
-        (folder / "BUYBOT.bat").write_text("@echo off\n", encoding="utf-8")
-        (folder / "kalshi_15m_buy_bot_v67.py").write_text("# raw runtime engine\n", encoding="utf-8")
+        (folder / "CONTROL_CENTER.bat").write_text("@echo off\n", encoding="utf-8")
+        (folder / "schedule_worker_15m_v67.py").write_text("# raw runtime engine\n", encoding="utf-8")
 
         path, kind = bm.detect_launcher(folder, self.config_for(self.base))
 
-        self.assertEqual(Path(path).name, "BUYBOT.bat")
+        self.assertEqual(Path(path).name, "CONTROL_CENTER.bat")
         self.assertEqual(kind, "batch")
 
     def test_sidecar_launch_helpers_are_not_auto_start_candidates(self) -> None:
-        folder = self.base / "kraken_multi_spread_bot"
-        sidecar = folder / "kraken_sidecars"
+        folder = self.base / "data_worker_collection"
+        sidecar = folder / "data_worker_sidecars"
         sidecar.mkdir(parents=True)
-        (folder / "kraken.bat").write_text("@echo off\n", encoding="utf-8")
-        helper = sidecar / "kraken_r238_launch_settle_capital_circulation.py"
+        (folder / "worker_console.bat").write_text("@echo off\n", encoding="utf-8")
+        helper = sidecar / "data_worker_launch_auxiliary_service.py"
         helper.write_text("# sidecar helper, not a primary launcher\n", encoding="utf-8")
 
         starts, _ = bm.audit_launcher_candidates(folder, self.config_for(self.base))
@@ -255,11 +258,11 @@ class LauncherSafetyTests(IsolatedAppMixin, unittest.TestCase):
 
         self.assertTrue(sidecar_candidate.blocked)
         path, kind = bm.detect_launcher(folder, self.config_for(self.base))
-        self.assertEqual(Path(path).name, "kraken.bat")
+        self.assertEqual(Path(path).name, "worker_console.bat")
         self.assertEqual(kind, "batch")
 
     def test_stop_test_files_are_blocked_even_when_they_contain_close_terms(self) -> None:
-        folder = self.base / "kalshi_15m_buy_bot"
+        folder = self.base / "schedule_worker_15m"
         tests_dir = folder / "tests"
         tests_dir.mkdir(parents=True)
         test_file = tests_dir / "v67_68_postclose_rollup_guard_test.py"
@@ -272,15 +275,15 @@ class LauncherSafetyTests(IsolatedAppMixin, unittest.TestCase):
 
     def test_selftest_does_not_warn_for_monitor_only_utility_folders(self) -> None:
         bots_root = self.base / "Bots"
-        chunker = bots_root / "ChatGPT_Text_Chunker_v1.1.0"
-        netloss = bots_root / "NetLossDoctor_NoBooster_ThrottleAware_Bundle_v2.2.0"
-        trade = bots_root / "MysteryTradeBot"
-        chunker.mkdir(parents=True)
-        netloss.mkdir(parents=True)
-        trade.mkdir(parents=True)
-        (chunker / "requirements.txt").write_text("# utility marker\n", encoding="utf-8")
-        (netloss / "requirements.txt").write_text("# utility marker\n", encoding="utf-8")
-        (trade / "requirements.txt").write_text("# bot marker\n", encoding="utf-8")
+        document_utility = bots_root / "DocumentUtility_v1.1.0"
+        network_utility = bots_root / "NetworkUtility_v2.2.0"
+        service = bots_root / "MysteryService"
+        document_utility.mkdir(parents=True)
+        network_utility.mkdir(parents=True)
+        service.mkdir(parents=True)
+        (document_utility / "requirements.txt").write_text("# utility marker\n", encoding="utf-8")
+        (network_utility / "requirements.txt").write_text("# utility marker\n", encoding="utf-8")
+        (service / "requirements.txt").write_text("# bot marker\n", encoding="utf-8")
 
         cfg = self.config_for(bots_root)
         with mock.patch.object(bm, "get_processes", return_value=[]), mock.patch.object(bm, "process_inventory_reliable", return_value=False):
@@ -288,12 +291,12 @@ class LauncherSafetyTests(IsolatedAppMixin, unittest.TestCase):
             result = bm.run_selftest(cfg, bots)
 
         coverage = next(item for item in result["checks"] if item["name"] == "Start launcher coverage")
-        self.assertEqual(bots["ChatGPT_Text_Chunker_v1.1.0"].category, "utility")
-        self.assertEqual(bots["NetLossDoctor_NoBooster_ThrottleAware_Bundle_v2.2.0"].category, "utility")
+        self.assertEqual(bots["DocumentUtility_v1.1.0"].category, "utility")
+        self.assertEqual(bots["NetworkUtility_v2.2.0"].category, "utility")
         self.assertEqual(coverage["status"], "WARN")
-        self.assertIn("MysteryTradeBot", coverage["detail"])
-        self.assertNotIn("ChatGPT_Text_Chunker", coverage["detail"])
-        self.assertNotIn("NetLossDoctor", coverage["detail"])
+        self.assertIn("MysteryService", coverage["detail"])
+        self.assertNotIn("DocumentUtility", coverage["detail"])
+        self.assertNotIn("NetworkUtility", coverage["detail"])
 
     def test_extracted_botops_release_folders_are_ignored_by_pattern(self) -> None:
         bots_root = self.base / "Bots"
@@ -330,6 +333,156 @@ class LauncherSafetyTests(IsolatedAppMixin, unittest.TestCase):
         self.assertIn("OldBot", bots)
         self.assertEqual(json.loads(bm.registry_path().read_text(encoding="utf-8")), original)
 
+    def test_unsafe_existing_bots_root_does_not_rewrite_manager_state(self) -> None:
+        bots_root = self.base / "Bots"
+        bots_root.mkdir()
+        cfg = self.config_for(bots_root)
+        registry_original = {
+            "version": bm.REGISTRY_VERSION,
+            "updated_at": "known-good",
+            "bots": {"OldBot": {"name": "OldBot", "path": str(self.base / "OldBot"), "launcher": ""}},
+        }
+        runtime_original = {
+            "version": bm.RUNTIME_VERSION,
+            "updated_at": "known-good",
+            "bots": {"OldBot": {"roots": []}},
+        }
+        health_original = {
+            "version": bm.HEALTH_STATE_VERSION,
+            "updated_at": "known-good",
+            "bots": {"OldBot": {"samples": []}},
+        }
+        bm.registry_path().write_text(json.dumps(registry_original, indent=2), encoding="utf-8")
+        bm.runtime_state_path().write_text(json.dumps(runtime_original, indent=2), encoding="utf-8")
+        bm.health_state_path().write_text(json.dumps(health_original, indent=2), encoding="utf-8")
+        original_link_check = bm.path_is_reparse_or_symlink
+
+        def root_looks_linked(path: Path) -> bool:
+            return Path(path) == bots_root or original_link_check(Path(path))
+
+        with mock.patch.object(bm, "path_is_reparse_or_symlink", side_effect=root_looks_linked):
+            bots = bm.scan_bots(cfg, save=True)
+
+        self.assertIn("OldBot", bots)
+        self.assertEqual(json.loads(bm.registry_path().read_text(encoding="utf-8")), registry_original)
+        self.assertEqual(json.loads(bm.runtime_state_path().read_text(encoding="utf-8")), runtime_original)
+        self.assertEqual(json.loads(bm.health_state_path().read_text(encoding="utf-8")), health_original)
+
+    def test_root_enumeration_failure_preserves_all_manager_state(self) -> None:
+        bots_root = self.base / "Bots"
+        bots_root.mkdir()
+        original = {
+            "version": bm.REGISTRY_VERSION,
+            "updated_at": "known-good",
+            "bots": {"OldBot": {"name": "OldBot", "path": str(self.base / "OldBot"), "launcher": ""}},
+        }
+        bm.registry_path().write_text(json.dumps(original, indent=2), encoding="utf-8")
+        real_iterdir = Path.iterdir
+
+        def fail_root_iteration(path: Path):
+            if Path(path) == bots_root:
+                raise PermissionError("synthetic root traversal failure")
+            return real_iterdir(path)
+
+        with mock.patch.object(Path, "iterdir", fail_root_iteration), mock.patch.object(
+            bm, "write_registry"
+        ) as write_registry, mock.patch.object(bm, "prune_runtime_state") as prune_runtime, mock.patch.object(
+            bm, "prune_health_state"
+        ) as prune_health:
+            bots = bm.scan_bots(self.config_for(bots_root), save=True)
+
+        self.assertIn("OldBot", bots)
+        write_registry.assert_not_called()
+        prune_runtime.assert_not_called()
+        prune_health.assert_not_called()
+
+    def test_nested_traversal_failure_preserves_all_manager_state(self) -> None:
+        bots_root = self.base / "Bots"
+        collection = bots_root / "Collection"
+        collection.mkdir(parents=True)
+        original = {
+            "version": bm.REGISTRY_VERSION,
+            "updated_at": "known-good",
+            "bots": {"OldBot": {"name": "OldBot", "path": str(self.base / "OldBot"), "launcher": ""}},
+        }
+        bm.registry_path().write_text(json.dumps(original, indent=2), encoding="utf-8")
+        real_walk = bm.os.walk
+
+        def fail_collection_walk(top, *args, **kwargs):
+            if Path(top) == collection:
+                onerror = kwargs.get("onerror")
+                if onerror is not None:
+                    onerror(PermissionError("synthetic nested traversal failure"))
+                return iter(())
+            return real_walk(top, *args, **kwargs)
+
+        with mock.patch.object(bm.os, "walk", side_effect=fail_collection_walk), mock.patch.object(
+            bm, "write_registry"
+        ) as write_registry, mock.patch.object(bm, "prune_runtime_state") as prune_runtime, mock.patch.object(
+            bm, "prune_health_state"
+        ) as prune_health:
+            bots = bm.scan_bots(self.config_for(bots_root), save=True)
+
+        self.assertIn("OldBot", bots)
+        write_registry.assert_not_called()
+        prune_runtime.assert_not_called()
+        prune_health.assert_not_called()
+
+    def test_child_safety_failure_after_root_preflight_preserves_manager_state(self) -> None:
+        bots_root = self.base / "Bots"
+        child = bots_root / "TemporarilyInaccessibleBot"
+        child.mkdir(parents=True)
+        (child / "start.bat").write_text("@echo off\n", encoding="utf-8")
+        original = {
+            "version": bm.REGISTRY_VERSION,
+            "updated_at": "known-good",
+            "bots": {"OldBot": {"name": "OldBot", "path": str(self.base / "OldBot"), "launcher": ""}},
+        }
+        bm.registry_path().write_text(json.dumps(original, indent=2), encoding="utf-8")
+        real_safety_check = bm.directory_is_safe_within
+
+        def fail_child_safety(path: Path, root: Path) -> bool:
+            if Path(path) == child and Path(root) == bots_root:
+                return False
+            return real_safety_check(Path(path), Path(root))
+
+        with mock.patch.object(bm, "directory_is_safe_within", side_effect=fail_child_safety), mock.patch.object(
+            bm, "write_registry"
+        ) as write_registry, mock.patch.object(bm, "prune_runtime_state") as prune_runtime, mock.patch.object(
+            bm, "prune_health_state"
+        ) as prune_health:
+            bots = bm.scan_bots(self.config_for(bots_root), save=True)
+
+        self.assertIn("OldBot", bots)
+        write_registry.assert_not_called()
+        prune_runtime.assert_not_called()
+        prune_health.assert_not_called()
+
+    def test_launcher_candidate_cap_preserves_manager_state(self) -> None:
+        bots_root = self.base / "Bots"
+        child = bots_root / "ManyLaunchersBot"
+        child.mkdir(parents=True)
+        (child / "start_one.bat").write_text("@echo off\n", encoding="utf-8")
+        (child / "start_two.bat").write_text("@echo off\n", encoding="utf-8")
+        original = {
+            "version": bm.REGISTRY_VERSION,
+            "updated_at": "known-good",
+            "bots": {"OldBot": {"name": "OldBot", "path": str(self.base / "OldBot"), "launcher": ""}},
+        }
+        bm.registry_path().write_text(json.dumps(original, indent=2), encoding="utf-8")
+        cfg = self.config_for(bots_root)
+        cfg["max_launcher_candidates_per_bot"] = 1
+
+        with mock.patch.object(bm, "write_registry") as write_registry, mock.patch.object(
+            bm, "prune_runtime_state"
+        ) as prune_runtime, mock.patch.object(bm, "prune_health_state") as prune_health:
+            bots = bm.scan_bots(cfg, save=True)
+
+        self.assertIn("OldBot", bots)
+        write_registry.assert_not_called()
+        prune_runtime.assert_not_called()
+        prune_health.assert_not_called()
+
     def test_path_targeting_report_records_root_source_and_missing_guard(self) -> None:
         missing_root = self.base / "MissingRoot"
         cfg = self.config_for(missing_root)
@@ -342,11 +495,30 @@ class LauncherSafetyTests(IsolatedAppMixin, unittest.TestCase):
         self.assertEqual(report["scan_write_guard"], "enabled_no_rewrite_when_root_missing")
         self.assertTrue(any("does not exist" in item for item in report["findings"]))
 
-    def test_stale_launcher_priority_config_still_prefers_buybot_wrapper(self) -> None:
-        folder = self.base / "kalshi_15m_buy_bot"
+    def test_path_text_within_canonicalizes_parent_traversal(self) -> None:
+        self.assertTrue(bm.path_text_within(r"C:\Bots", r"C:\Bots\Worker"))
+        self.assertFalse(bm.path_text_within(r"C:\Bots", r"C:\Bots\..\Sensitive"))
+        self.assertFalse(bm.path_text_within(r"C:\Bots", r"D:\Bots\Worker"))
+
+    def test_reparse_like_child_directory_is_not_discovered(self) -> None:
+        bots_root = self.base / "Bots"
+        linked = bots_root / "LinkedWorker"
+        linked.mkdir(parents=True)
+        (linked / "start.bat").write_text("@echo off\n", encoding="utf-8")
+        original = bm.path_is_reparse_or_symlink
+
+        def looks_linked(path: Path) -> bool:
+            return Path(path) == linked or original(Path(path))
+
+        with mock.patch.object(bm, "path_is_reparse_or_symlink", side_effect=looks_linked):
+            bots = bm.scan_bots(self.config_for(bots_root), save=False)
+        self.assertNotIn("LinkedWorker", bots)
+
+    def test_stale_launcher_priority_config_still_prefers_control_center_wrapper(self) -> None:
+        folder = self.base / "schedule_worker_15m"
         folder.mkdir()
-        (folder / "BUYBOT.bat").write_text("@echo off\n", encoding="utf-8")
-        (folder / "kalshi_15m_buy_bot_v67.py").write_text("# raw runtime engine\n", encoding="utf-8")
+        (folder / "CONTROL_CENTER.bat").write_text("@echo off\n", encoding="utf-8")
+        (folder / "schedule_worker_15m_v67.py").write_text("# raw runtime engine\n", encoding="utf-8")
         cfg = self.config_for(self.base)
         cfg["launcher_priority"] = [
             "start.bat",
@@ -360,73 +532,73 @@ class LauncherSafetyTests(IsolatedAppMixin, unittest.TestCase):
             "run.ps1",
             "main.py",
             "bot.py",
-            "trade_bot.py",
-            "trader.py",
+            "worker.py",
+            "service.py",
             "app.py",
             "__main__.py",
             "index.js",
             "server.js",
             "package.json",
-            "buybot.bat",
-            "sellbot.bat",
+            "control_center.bat",
+            "service_console.bat",
         ]
 
         path, kind = bm.detect_launcher(folder, cfg)
 
-        self.assertEqual(Path(path).name, "BUYBOT.bat")
+        self.assertEqual(Path(path).name, "CONTROL_CENTER.bat")
         self.assertEqual(kind, "batch")
 
     def test_config_migration_promotes_current_launcher_priority_defaults(self) -> None:
         cfg = self.config_for(self.base)
-        cfg["launcher_priority"] = ["bot.bat", "main.py", "buybot.bat"]
+        cfg["launcher_priority"] = ["bot.bat", "main.py", "control_center.bat"]
 
         migrated = bm._coerce_config(cfg)
 
-        self.assertLess(migrated["launcher_priority"].index("buybot.bat"), migrated["launcher_priority"].index("bot.bat"))
-        self.assertLess(migrated["launcher_priority"].index("kraken.bat"), migrated["launcher_priority"].index("bot.bat"))
+        self.assertLess(migrated["launcher_priority"].index("control_center.bat"), migrated["launcher_priority"].index("bot.bat"))
+        self.assertLess(migrated["launcher_priority"].index("worker_console.bat"), migrated["launcher_priority"].index("bot.bat"))
 
     def test_project_identity_terms_allow_exact_root_wrappers(self) -> None:
-        chatgpt = self.base / "ChatGPT_Text_Chunker"
-        tools = chatgpt / "tools"
+        utility = self.base / "SupportUtility"
+        tools = utility / "tools"
         tools.mkdir(parents=True)
-        (chatgpt / "ChatGPT_Text_Chunker.bat").write_text("@echo off\n", encoding="utf-8")
-        (tools / "chatgpt_text_chunker.py").write_text("# implementation module\n", encoding="utf-8")
+        (utility / "SupportUtility.bat").write_text("@echo off\n", encoding="utf-8")
+        (tools / "support_utility.py").write_text("# implementation module\n", encoding="utf-8")
 
-        path, kind = bm.detect_launcher(chatgpt, self.config_for(self.base))
-        starts, _ = bm.audit_launcher_candidates(chatgpt, self.config_for(self.base))
-        module = next(item for item in starts if Path(item.path).name == "chatgpt_text_chunker.py")
+        path, kind = bm.detect_launcher(utility, self.config_for(self.base))
+        starts, _ = bm.audit_launcher_candidates(utility, self.config_for(self.base))
+        module = next(item for item in starts if Path(item.path).name == "support_utility.py")
 
-        self.assertEqual(Path(path).name, "ChatGPT_Text_Chunker.bat")
+        self.assertEqual(Path(path).name, "SupportUtility.bat")
         self.assertEqual(kind, "batch")
         self.assertTrue(module.blocked)
 
-    def test_netlossdoctor_identity_bat_allowed_report_helper_blocked(self) -> None:
-        folder = self.base / "NetLossDoctor"
+    def test_network_utility_identity_bat_allowed_report_helper_blocked(self) -> None:
+        folder = self.base / "NetworkUtility"
         folder.mkdir()
-        (folder / "NetLossDoctor.bat").write_text("@echo off\n", encoding="utf-8")
-        (folder / "NetLossDoctor.ps1").write_text("Write-Host run\n", encoding="utf-8")
-        (folder / "Compare-NetLossDoctorReports.ps1").write_text("Write-Host compare\n", encoding="utf-8")
+        (folder / "NetworkUtility.bat").write_text("@echo off\n", encoding="utf-8")
+        (folder / "NetworkUtility.ps1").write_text("Write-Host run\n", encoding="utf-8")
+        (folder / "Compare-NetworkUtilityReports.ps1").write_text("Write-Host compare\n", encoding="utf-8")
 
         path, kind = bm.detect_launcher(folder, self.config_for(self.base))
         starts, _ = bm.audit_launcher_candidates(folder, self.config_for(self.base))
-        report_helper = next(item for item in starts if Path(item.path).name == "Compare-NetLossDoctorReports.ps1")
+        report_helper = next(item for item in starts if Path(item.path).name == "Compare-NetworkUtilityReports.ps1")
 
-        self.assertEqual(Path(path).name, "NetLossDoctor.bat")
+        self.assertEqual(Path(path).name, "NetworkUtility.bat")
         self.assertEqual(kind, "batch")
         self.assertTrue(report_helper.blocked)
 
 
 class HealthSelectionTests(IsolatedAppMixin, unittest.TestCase):
-    def test_operational_log_beats_newer_export_version_and_chatgpt_files(self) -> None:
-        folder = self.base / "EziORB_trade_bot"
+    def test_operational_log_beats_newer_export_version_and_support_files(self) -> None:
+        folder = self.base / "EventWorker"
         logs = folder / "logs"
         logs.mkdir(parents=True)
         operational = logs / "events.jsonl"
         operational.write_text('{"event":"heartbeat"}\n', encoding="utf-8")
         bad_files = [
-            folder / "PASTE_HEALTH_TO_CHATGPT.txt",
+            folder / "PASTE_HEALTH_TO_SUPPORT.txt",
             folder / "VERSION.txt",
-            folder / "latest_r247_chatgpt_export_compiler.txt",
+            folder / "latest_r247_support_export_compiler.txt",
         ]
         for path in bad_files:
             path.write_text("not a runtime heartbeat\n", encoding="utf-8")
@@ -461,7 +633,7 @@ class HealthSelectionTests(IsolatedAppMixin, unittest.TestCase):
 
     def test_export_handoff_log_is_rejected_even_with_log_extension(self) -> None:
         folder = self.base / "PC_Improve"
-        exported = folder / "exports_for_chatgpt"
+        exported = folder / "exports_for_support"
         exported.mkdir(parents=True)
         path = exported / "ZIP_CREATION_ATTEMPTS_20260709_055433.log"
         path.write_text("archive attempt\n", encoding="utf-8")
@@ -476,7 +648,7 @@ class HealthSelectionTests(IsolatedAppMixin, unittest.TestCase):
         self.assertIsNone(bm.select_health_candidate(bot, cfg))
 
     def test_semantic_launcher_logs_directory_is_strong_evidence(self) -> None:
-        folder = self.base / "kraken_multi_spread_bot"
+        folder = self.base / "data_worker_collection"
         logs = folder / "launcher_logs"
         logs.mkdir(parents=True)
         path = logs / "BTC-USD_latest.log"
@@ -526,11 +698,11 @@ class HealthSelectionTests(IsolatedAppMixin, unittest.TestCase):
         self.assertEqual(selected_old.tier, "standard")
 
     def test_timestamp_rotations_share_a_stable_health_family(self) -> None:
-        folder = self.base / "TradeBot"
+        folder = self.base / "ServiceWorker"
         logs = folder / "logs"
         logs.mkdir(parents=True)
-        first = logs / "trade_bot_20260709_055117.log"
-        second = logs / "trade_bot_20260709_061245.log"
+        first = logs / "worker_20260709_055117.log"
+        second = logs / "worker_20260709_061245.log"
 
         self.assertEqual(
             bm.health_candidate_family(first, folder),
@@ -538,7 +710,7 @@ class HealthSelectionTests(IsolatedAppMixin, unittest.TestCase):
         )
 
     def test_sharded_latest_logs_share_aggregate_progress_family(self) -> None:
-        folder = self.base / "KrakenBot"
+        folder = self.base / "DataWorker"
         logs = folder / "launcher_logs"
         logs.mkdir(parents=True)
         btc = logs / "BTC-USD_latest.log"
@@ -724,10 +896,38 @@ class StructuredHealthContractTests(IsolatedAppMixin, unittest.TestCase):
         process = bm.ProcessInfo(pid, "cmd.exe", creation_time=created)
         current = bm.ProcessInfo(os.getpid(), "python.exe", creation_time=1.0)
         tracking = bm.TrackingResult([process], [process], [], [], "NONE", [])
-        with mock.patch.object(bm, "get_processes", return_value=[current, process]), mock.patch.object(
+        with mock.patch.object(bm, "get_processes", return_value=self.complete_inventory(current, process)), mock.patch.object(
             bm, "track_bot", return_value=tracking
         ):
             return bm.status_for_bots(cfg, {bot.name: bot}, persist_health=False)[0]
+
+    def test_contract_identity_rejects_missing_actual_creation_time(self) -> None:
+        candidate = bm.LogCandidate(
+            "health.json",
+            100,
+            True,
+            time.time(),
+            [],
+            evidence_kind="contract",
+            contract_pid=42,
+            contract_process_started_at_epoch=100.0,
+        )
+        process = bm.ProcessInfo(42, "worker.exe", creation_time=None)
+        self.assertFalse(bm.contract_identity_match(candidate, [process]))
+
+    def test_contract_identity_rejects_pid_without_expected_creation_time(self) -> None:
+        candidate = bm.LogCandidate(
+            "health.json",
+            100,
+            True,
+            time.time(),
+            [],
+            evidence_kind="contract",
+            contract_pid=42,
+            contract_process_started_at_epoch=None,
+        )
+        process = bm.ProcessInfo(42, "worker.exe", creation_time=100.0)
+        self.assertFalse(bm.contract_identity_match(candidate, [process]))
 
     def test_valid_contract_outranks_nearby_operational_log(self) -> None:
         folder = self.base / "ContractBot"
@@ -868,23 +1068,23 @@ class StructuredHealthContractTests(IsolatedAppMixin, unittest.TestCase):
 
 class ProcessIdentityTests(IsolatedAppMixin, unittest.TestCase):
     def test_path_boundary_does_not_match_similar_bot_name(self) -> None:
-        path = r"C:\Bots\KrakenBot"
-        self.assertTrue(bm.path_in_process_text(path, r'python "C:\Bots\KrakenBot\main.py"'))
-        self.assertFalse(bm.path_in_process_text(path, r'python "C:\Bots\KrakenBot2\main.py"'))
-        self.assertFalse(bm.path_in_process_text(path, r'python "C:\Bots\KrakenBot_Backup\main.py"'))
+        path = r"C:\Bots\DataWorker"
+        self.assertTrue(bm.path_in_process_text(path, r'python "C:\Bots\DataWorker\main.py"'))
+        self.assertFalse(bm.path_in_process_text(path, r'python "C:\Bots\DataWorker2\main.py"'))
+        self.assertFalse(bm.path_in_process_text(path, r'python "C:\Bots\DataWorker_Backup\main.py"'))
 
     def test_observed_tracking_requires_exact_bot_or_launcher_path(self) -> None:
         bot = bm.BotRecord(
-            name="KrakenBot",
-            path=r"C:\Bots\KrakenBot",
-            launcher=r"C:\Bots\KrakenBot\kraken.bat",
+            name="DataWorker",
+            path=r"C:\Bots\DataWorker",
+            launcher=r"C:\Bots\DataWorker\worker_console.bat",
             launcher_kind="batch",
             launcher_safe=True,
         )
         processes = [
             bm.ProcessInfo(1, "python.exe", command_line=r'python "C:\Bots\OtherBot\main.py"'),
-            bm.ProcessInfo(2, "cmd.exe", command_line=r'cmd /k call "C:\Bots\KrakenBot\kraken.bat"'),
-            bm.ProcessInfo(3, "python.exe", command_line=r'python "C:\Bots\KrakenBot2\main.py"'),
+            bm.ProcessInfo(2, "cmd.exe", command_line=r'cmd /k call "C:\Bots\DataWorker\worker_console.bat"'),
+            bm.ProcessInfo(3, "python.exe", command_line=r'python "C:\Bots\DataWorker2\main.py"'),
         ]
         observed, roots, confidence, _ = bm.observed_tracking(bot, processes)
         self.assertEqual([item.pid for item in observed], [2])
@@ -893,13 +1093,13 @@ class ProcessIdentityTests(IsolatedAppMixin, unittest.TestCase):
 
     def test_distinctive_relative_launcher_is_monitor_only_match(self) -> None:
         bot = bm.BotRecord(
-            name="KrakenBot",
-            path=r"C:\Bots\KrakenBot",
-            launcher=r"C:\Bots\KrakenBot\kraken.bat",
+            name="DataWorker",
+            path=r"C:\Bots\DataWorker",
+            launcher=r"C:\Bots\DataWorker\worker_console.bat",
             launcher_kind="batch",
             launcher_safe=True,
         )
-        process = bm.ProcessInfo(22, "cmd.exe", command_line=r"cmd.exe /k kraken.bat")
+        process = bm.ProcessInfo(22, "cmd.exe", command_line=r"cmd.exe /k worker_console.bat")
         observed, roots, confidence, reasons = bm.observed_tracking(bot, [process])
         self.assertEqual([item.pid for item in observed], [22])
         self.assertEqual([item.pid for item in roots], [22])
@@ -908,21 +1108,21 @@ class ProcessIdentityTests(IsolatedAppMixin, unittest.TestCase):
 
     def test_editor_viewer_path_reference_is_not_counted_as_running_bot(self) -> None:
         bot = bm.BotRecord(
-            name="Coinbase_CDE_Governance_Bot",
-            path=r"C:\Bots\Coinbase_CDE_Governance_Bot",
-            launcher=r"C:\Bots\Coinbase_CDE_Governance_Bot\START_HERE_COINBASE_CDE_GOVERNANCE_BOT.bat",
+            name="PolicyWorker",
+            path=r"C:\Bots\PolicyWorker",
+            launcher=r"C:\Bots\PolicyWorker\START_HERE_POLICY_CDE_GOVERNANCE_BOT.bat",
             launcher_kind="batch",
             launcher_safe=True,
         )
         editor = bm.ProcessInfo(
             31,
             "notepad++.exe",
-            command_line=r'notepad++.exe "C:\Bots\Coinbase_CDE_Governance_Bot\START_HERE_COINBASE_CDE_GOVERNANCE_BOT.bat"',
+            command_line=r'notepad++.exe "C:\Bots\PolicyWorker\START_HERE_POLICY_CDE_GOVERNANCE_BOT.bat"',
         )
         runtime = bm.ProcessInfo(
             32,
             "cmd.exe",
-            command_line=r'cmd /k call "C:\Bots\Coinbase_CDE_Governance_Bot\START_HERE_COINBASE_CDE_GOVERNANCE_BOT.bat"',
+            command_line=r'cmd /k call "C:\Bots\PolicyWorker\START_HERE_POLICY_CDE_GOVERNANCE_BOT.bat"',
         )
 
         observed_editor, roots_editor, confidence_editor, reasons_editor = bm.observed_tracking(bot, [editor])
@@ -938,14 +1138,14 @@ class ProcessIdentityTests(IsolatedAppMixin, unittest.TestCase):
 
     def test_observed_launcher_root_expands_to_descendant_tree(self) -> None:
         bot = bm.BotRecord(
-            name="KrakenBot",
-            path=r"C:\Bots\KrakenBot",
-            launcher=r"C:\Bots\KrakenBot\kraken.bat",
+            name="DataWorker",
+            path=r"C:\Bots\DataWorker",
+            launcher=r"C:\Bots\DataWorker\worker_console.bat",
             launcher_kind="batch",
             launcher_safe=True,
         )
         processes = [
-            bm.ProcessInfo(30, "cmd.exe", command_line=r"cmd.exe /k kraken.bat", creation_time=100),
+            bm.ProcessInfo(30, "cmd.exe", command_line=r"cmd.exe /k worker_console.bat", creation_time=100),
             bm.ProcessInfo(31, "python.exe", command_line="python main.py", parent_pid=30, creation_time=101),
             bm.ProcessInfo(32, "worker.exe", command_line="worker", parent_pid=31, creation_time=102),
         ]
@@ -980,9 +1180,9 @@ class ProcessIdentityTests(IsolatedAppMixin, unittest.TestCase):
 
     def test_managed_tracking_rejects_pid_reuse_by_creation_time(self) -> None:
         bot = bm.BotRecord(
-            name="TradeBot",
-            path=r"C:\Bots\TradeBot",
-            launcher=r"C:\Bots\TradeBot\start.bat",
+            name="ServiceWorker",
+            path=r"C:\Bots\ServiceWorker",
+            launcher=r"C:\Bots\ServiceWorker\start.bat",
             launcher_kind="batch",
             launcher_safe=True,
         )
@@ -1004,9 +1204,9 @@ class ProcessIdentityTests(IsolatedAppMixin, unittest.TestCase):
 
     def test_managed_tracking_rejects_missing_creation_identity(self) -> None:
         bot = bm.BotRecord(
-            name="TradeBot",
-            path=r"C:\Bots\TradeBot",
-            launcher=r"C:\Bots\TradeBot\start.bat",
+            name="ServiceWorker",
+            path=r"C:\Bots\ServiceWorker",
+            launcher=r"C:\Bots\ServiceWorker\start.bat",
             launcher_kind="batch",
             launcher_safe=True,
         )
@@ -1084,7 +1284,7 @@ class PersistenceAndPrivacyTests(IsolatedAppMixin, unittest.TestCase):
         self.assertEqual(saved["bots_root"], str(config_root))
 
     def test_redaction_preserves_long_names_and_redacts_contextual_secrets(self) -> None:
-        long_name = "Coinbase_CDE_Governance_Bot_With_A_Very_Long_But_Harmless_Name"
+        long_name = "PolicyWorker_With_A_Very_Long_But_Harmless_Name"
         text = f"folder={long_name} api_key=abcdefghijklmnopqrstuvwxyz123456 Bearer abcdefghijklmnop"
         redacted = bm.redact(text)
         self.assertIn(long_name, redacted)
@@ -1205,33 +1405,45 @@ class PersistenceAndPrivacyTests(IsolatedAppMixin, unittest.TestCase):
         saved = json.loads(bm.config_path().read_text(encoding="utf-8"))
         self.assertEqual(saved["custom_future_toggle"], "keep-me")
 
-    def test_diagnostic_sanitizer_redacts_secret_values_by_key_context(self) -> None:
+    def test_support_sanitizer_redacts_secret_values_by_key_context(self) -> None:
         cfg = self.config_for(self.base)
         payload = {
             "api_key": "plain-value-that-does-not-match-a-known-token-pattern",
             "nested": {
                 "client_secret": "also-plain",
+                "account_id": "account-0042",
+                "client_id": 987654321,
+                "accountId": 123456789,
+                "clientSecret": "camel-secret",
+                "tenantID": "tenant-camel",
+                "portfolioId": "portfolio-camel",
                 "secret_or_credential_access": False,
             },
             "label": "Safe Bot Name",
         }
 
-        sanitized = bm.sanitize_for_diagnostics(payload, cfg)
+        sanitized = bm.sanitize_for_support(payload, cfg)
 
         self.assertEqual(sanitized["api_key"], "***REDACTED_PRESENT***")
         self.assertEqual(sanitized["nested"]["client_secret"], "***REDACTED_PRESENT***")
+        self.assertEqual(sanitized["nested"]["account_id"], "***REDACTED_PRESENT***")
+        self.assertEqual(sanitized["nested"]["client_id"], "***REDACTED_PRESENT***")
+        self.assertEqual(sanitized["nested"]["accountId"], "***REDACTED_PRESENT***")
+        self.assertEqual(sanitized["nested"]["clientSecret"], "***REDACTED_PRESENT***")
+        self.assertEqual(sanitized["nested"]["tenantID"], "***REDACTED_PRESENT***")
+        self.assertEqual(sanitized["nested"]["portfolioId"], "***REDACTED_PRESENT***")
         self.assertFalse(sanitized["nested"]["secret_or_credential_access"])
         self.assertEqual(sanitized["label"], "Safe Bot Name")
 
 
 class StatusTests(IsolatedAppMixin, unittest.TestCase):
     def test_python_launcher_with_only_idle_cmd_wrapper_is_not_healthy(self) -> None:
-        folder = self.base / "TradeBot"
+        folder = self.base / "ServiceWorker"
         folder.mkdir()
         launcher = folder / "main.py"
         launcher.write_text("print('done')\n", encoding="utf-8")
         bot = bm.BotRecord(
-            name="TradeBot",
+            name="ServiceWorker",
             path=str(folder),
             launcher=str(launcher),
             launcher_kind="python",
@@ -1250,7 +1462,7 @@ class StatusTests(IsolatedAppMixin, unittest.TestCase):
         }
         cfg = self.config_for(self.base)
         current = bm.ProcessInfo(os.getpid(), "python.exe", creation_time=1.0)
-        with mock.patch.object(bm, "get_processes", return_value=[current, process]), mock.patch.object(
+        with mock.patch.object(bm, "get_processes", return_value=self.complete_inventory(current, process)), mock.patch.object(
             bm, "read_runtime_state", return_value=state
         ):
             status = bm.status_for_bots(cfg, {bot.name: bot})[0]
@@ -1285,7 +1497,7 @@ class StatusTests(IsolatedAppMixin, unittest.TestCase):
         current = bm.ProcessInfo(os.getpid(), "python.exe", creation_time=1.0)
 
         current_time = [now]
-        with mock.patch.object(bm, "get_processes", return_value=[current, process]), mock.patch.object(
+        with mock.patch.object(bm, "get_processes", return_value=self.complete_inventory(current, process)), mock.patch.object(
             bm.time, "time", side_effect=lambda: current_time[0]
         ):
             first = bm.status_for_bots(cfg, {bot.name: bot})[0]
@@ -1300,7 +1512,7 @@ class StatusTests(IsolatedAppMixin, unittest.TestCase):
         future = time.time() + cfg["health_future_skew_seconds"] + 60
         os.utime(heartbeat, (future, future))
         bm._LOG_CANDIDATE_CACHE.clear()
-        with mock.patch.object(bm, "get_processes", return_value=[current, process]):
+        with mock.patch.object(bm, "get_processes", return_value=self.complete_inventory(current, process)):
             skewed = bm.status_for_bots(cfg, {bot.name: bot})[0]
         self.assertEqual(skewed.status, "RUNNING/TIME_SKEW")
         self.assertTrue(skewed.health_clock_skew)
@@ -1324,6 +1536,149 @@ class ControlBoundaryTests(IsolatedAppMixin, unittest.TestCase):
     def manager_process(self) -> bm.ProcessInfo:
         return bm.ProcessInfo(os.getpid(), "python.exe", creation_time=50.0)
 
+    def corroborating_process(self) -> bm.ProcessInfo:
+        return bm.ProcessInfo(os.getpid() + 1000, "worker.exe", creation_time=51.0)
+
+    def test_windows_inventory_requires_explicit_complete_provenance(self) -> None:
+        manager = self.manager_process()
+        two_record_partial = bm.ProcessInventory(
+            [manager, self.corroborating_process()],
+            complete=False,
+            source="test-partial",
+        )
+        with mock.patch.object(bm, "is_windows_host", return_value=True):
+            self.assertFalse(bm.process_inventory_reliable([manager]))
+            self.assertFalse(bm.process_inventory_reliable(two_record_partial))
+            self.assertTrue(bm.process_inventory_reliable(self.complete_inventory(manager, self.corroborating_process())))
+
+    def test_process_cache_preserves_complete_provenance(self) -> None:
+        inventory = self.complete_inventory(self.manager_process(), self.corroborating_process())
+        inventory.source = "test-cim"
+        cfg = self.config_for(self.base)
+        cfg["process_cache_seconds"] = 60
+        with mock.patch.object(bm, "is_windows_host", return_value=True), mock.patch.object(
+            bm, "get_windows_processes", return_value=inventory
+        ) as scan:
+            first = bm.get_processes(cfg, force=True)
+            second = bm.get_processes(cfg)
+        self.assertEqual(scan.call_count, 1)
+        self.assertIsInstance(first, bm.ProcessInventory)
+        self.assertIsInstance(second, bm.ProcessInventory)
+        self.assertTrue(first.complete)
+        self.assertTrue(second.complete)
+        self.assertEqual(second.source, "test-cim")
+
+    def test_windows_enumerator_marks_only_explicit_complete_envelope_complete(self) -> None:
+        raw = {
+            "Complete": True,
+            "ReportedCount": 2,
+            "Items": [
+                {
+                    "ProcessId": 0,
+                    "ParentProcessId": 0,
+                    "Name": "System Idle Process",
+                    "ExecutablePath": None,
+                    "CommandLine": None,
+                    "CreationDate": None,
+                    "WorkingSetSize": 0,
+                },
+                {
+                    "ProcessId": os.getpid(),
+                    "ParentProcessId": 1,
+                    "Name": "python.exe",
+                    "ExecutablePath": r"C:\\Python\\python.exe",
+                    "CommandLine": "python bot_manager.py",
+                    "CreationDate": "2026-07-19T11:00:00+00:00",
+                    "WorkingSetSize": 1024,
+                },
+            ],
+        }
+        completed = SimpleNamespace(returncode=0, stdout=json.dumps(raw), stderr="")
+        with mock.patch.object(bm.shutil, "which", return_value=r"C:\\Windows\\powershell.exe"), mock.patch.object(
+            bm.subprocess, "run", return_value=completed
+        ):
+            inventory = bm.get_windows_processes()
+        self.assertTrue(inventory.complete)
+        self.assertEqual(len(inventory), 1)
+        self.assertIn("Win32_Process", inventory.source)
+
+    def test_start_reaudits_persisted_launcher_inside_control_lock(self) -> None:
+        bot = self.make_bot()
+        blocked = Path(bot.path) / "build_helper.bat"
+        blocked.write_text("@echo off\n", encoding="utf-8")
+        bot.launcher = str(blocked)
+        bot.launcher_safe = True
+        bot.launcher_score = 999
+        inventory = self.complete_inventory(self.manager_process(), self.corroborating_process())
+        cfg = self.config_for(self.base)
+        empty_tracking = bm.TrackingResult([], [], [], [], "NONE", [])
+        with mock.patch.object(bm, "is_windows_host", return_value=True), mock.patch.object(
+            bm, "get_processes", return_value=inventory
+        ), mock.patch.object(bm, "track_bot", return_value=empty_tracking), mock.patch.object(
+            bm, "confirm_action", return_value=True
+        ), mock.patch.object(bm, "popen_new_console") as popen, mock.patch("builtins.print"):
+            self.assertFalse(bm.start_bot(bot, cfg))
+        popen.assert_not_called()
+
+    def test_start_records_no_ownership_without_exact_launched_pid_identity(self) -> None:
+        bot = self.make_bot()
+        inventory = self.complete_inventory(self.manager_process(), self.corroborating_process())
+        cfg = self.config_for(self.base)
+        cfg["start_settle_seconds"] = 0
+        empty_tracking = bm.TrackingResult([], [], [], [], "NONE", [])
+        launched = SimpleNamespace(pid=4242, poll=mock.Mock(return_value=None))
+        with mock.patch.object(bm, "is_windows_host", return_value=True), mock.patch.object(
+            bm, "get_processes", side_effect=[inventory, inventory, inventory, inventory]
+        ), mock.patch.object(bm, "track_bot", return_value=empty_tracking), mock.patch.object(
+            bm, "confirm_action", return_value=True
+        ), mock.patch.object(bm, "popen_new_console", return_value=launched), mock.patch.object(
+            bm, "record_runtime_roots"
+        ) as record, mock.patch("builtins.print"):
+            self.assertTrue(bm.start_bot(bot, cfg))
+        record.assert_not_called()
+
+    def test_start_records_ownership_only_when_immediate_and_settled_identity_match(self) -> None:
+        bot = self.make_bot()
+        baseline = self.complete_inventory(self.manager_process(), self.corroborating_process())
+        initial_root = bm.ProcessInfo(4242, "cmd.exe", creation_time=100.0)
+        settled_root = bm.ProcessInfo(4242, "cmd.exe", creation_time=100.0)
+        immediate = self.complete_inventory(self.manager_process(), self.corroborating_process(), initial_root)
+        settled = self.complete_inventory(self.manager_process(), self.corroborating_process(), settled_root)
+        cfg = self.config_for(self.base)
+        cfg["start_settle_seconds"] = 0
+        empty_tracking = bm.TrackingResult([], [], [], [], "NONE", [])
+        launched = SimpleNamespace(pid=4242, poll=mock.Mock(return_value=None))
+        with mock.patch.object(bm, "is_windows_host", return_value=True), mock.patch.object(
+            bm, "get_processes", side_effect=[baseline, baseline, immediate, settled]
+        ), mock.patch.object(bm, "track_bot", return_value=empty_tracking), mock.patch.object(
+            bm, "confirm_action", return_value=True
+        ), mock.patch.object(bm, "popen_new_console", return_value=launched), mock.patch.object(
+            bm, "record_runtime_roots"
+        ) as record, mock.patch("builtins.print"):
+            self.assertTrue(bm.start_bot(bot, cfg))
+        record.assert_called_once_with(bot, [settled_root], mock.ANY)
+
+    def test_start_records_no_ownership_for_same_pid_replacement_after_quick_exit(self) -> None:
+        bot = self.make_bot()
+        baseline = self.complete_inventory(self.manager_process(), self.corroborating_process())
+        initial_root = bm.ProcessInfo(4242, "cmd.exe", creation_time=100.0)
+        replacement = bm.ProcessInfo(4242, "unrelated.exe", creation_time=101.0)
+        immediate = self.complete_inventory(self.manager_process(), self.corroborating_process(), initial_root)
+        settled = self.complete_inventory(self.manager_process(), self.corroborating_process(), replacement)
+        cfg = self.config_for(self.base)
+        cfg["start_settle_seconds"] = 0
+        empty_tracking = bm.TrackingResult([], [], [], [], "NONE", [])
+        launched = SimpleNamespace(pid=4242, poll=mock.Mock(side_effect=[None, 0]))
+        with mock.patch.object(bm, "is_windows_host", return_value=True), mock.patch.object(
+            bm, "get_processes", side_effect=[baseline, baseline, immediate, settled]
+        ), mock.patch.object(bm, "track_bot", return_value=empty_tracking), mock.patch.object(
+            bm, "confirm_action", return_value=True
+        ), mock.patch.object(bm, "popen_new_console", return_value=launched), mock.patch.object(
+            bm, "record_runtime_roots"
+        ) as record, mock.patch("builtins.print"):
+            self.assertTrue(bm.start_bot(bot, cfg))
+        record.assert_not_called()
+
     def runtime_state(self, bot: bm.BotRecord, process: bm.ProcessInfo) -> dict:
         return {
             "bots": {
@@ -1341,27 +1696,12 @@ class ControlBoundaryTests(IsolatedAppMixin, unittest.TestCase):
             }
         }
 
-    def test_force_stop_invokes_taskkill_only_for_verified_root(self) -> None:
+    def test_forced_termination_is_disabled_without_platform_kill(self) -> None:
         bot = self.make_bot()
-        root = bm.ProcessInfo(4242, "cmd.exe", creation_time=100.0)
         cfg = self.config_for(self.base)
-        completed = SimpleNamespace(returncode=0, stdout="", stderr="")
-        manager = self.manager_process()
-        with mock.patch.object(bm, "is_windows_host", return_value=True), mock.patch.object(
-            bm, "get_processes", side_effect=[[root, manager], [root, manager], [manager]]
-        ), mock.patch.object(bm, "read_runtime_state", return_value=self.runtime_state(bot, root)), mock.patch.object(
-            bm, "confirm_force_action", return_value=True
-        ), mock.patch.object(
-            bm.subprocess, "run", return_value=completed
-        ) as run, mock.patch.object(
-            bm, "clear_runtime_bot"
-        ) as clear, mock.patch.object(
-            bm.time, "sleep"
-        ), mock.patch("builtins.print"):
-            self.assertTrue(bm.force_stop_bot(bot, cfg))
-        run.assert_called_once()
-        self.assertEqual(run.call_args.args[0], ["taskkill", "/PID", "4242", "/T", "/F"])
-        clear.assert_called_once_with(bot.name)
+        with mock.patch.object(bm.subprocess, "run") as run, mock.patch("builtins.print"):
+            self.assertFalse(bm.force_stop_bot(bot, cfg))
+        run.assert_not_called()
 
     def test_force_stop_refuses_observed_unowned_process(self) -> None:
         bot = self.make_bot()
@@ -1373,7 +1713,7 @@ class ControlBoundaryTests(IsolatedAppMixin, unittest.TestCase):
         )
         cfg = self.config_for(self.base)
         with mock.patch.object(bm, "is_windows_host", return_value=True), mock.patch.object(
-            bm, "get_processes", return_value=[observed, self.manager_process()]
+            bm, "get_processes", return_value=self.complete_inventory(observed, self.manager_process())
         ), mock.patch.object(bm, "read_runtime_state", return_value={"bots": {}}), mock.patch.object(
             bm.subprocess, "run"
         ) as run, mock.patch("builtins.print"):
@@ -1390,7 +1730,7 @@ class ControlBoundaryTests(IsolatedAppMixin, unittest.TestCase):
         )
         cfg = self.config_for(self.base)
         with mock.patch.object(bm, "is_windows_host", return_value=True), mock.patch.object(
-            bm, "get_processes", return_value=[observed, self.manager_process()]
+            bm, "get_processes", return_value=self.complete_inventory(observed, self.manager_process())
         ), mock.patch.object(bm, "read_runtime_state", return_value={"bots": {}}), mock.patch.object(
             bm, "confirm_action"
         ) as confirm, mock.patch("builtins.print"):
@@ -1403,7 +1743,7 @@ class ControlBoundaryTests(IsolatedAppMixin, unittest.TestCase):
         tracking = bm.TrackingResult([], [], [root], [root], "HIGH", ["exact launcher"])
         cfg = self.config_for(self.base)
         with mock.patch.object(bm, "is_windows_host", return_value=True), mock.patch.object(
-            bm, "get_processes", return_value=[root, self.manager_process()]
+            bm, "get_processes", return_value=self.complete_inventory(root, self.manager_process())
         ), mock.patch.object(bm, "track_bot", return_value=tracking
         ), mock.patch.object(bm, "confirm_force_action") as confirm, mock.patch("builtins.print"):
             self.assertFalse(bm.adopt_bot(bot, cfg))
@@ -1505,7 +1845,6 @@ class ControlBoundaryTests(IsolatedAppMixin, unittest.TestCase):
         bot = self.make_bot()
         cfg = self.config_for(self.base)
         cfg["control_action_lock_timeout_seconds"] = 1
-        cfg["control_action_lock_stale_seconds"] = 60
         lock = bm.control_action_lock_path()
         lock.write_text(
             json.dumps({
@@ -1519,7 +1858,7 @@ class ControlBoundaryTests(IsolatedAppMixin, unittest.TestCase):
         )
         manager = self.manager_process()
         with mock.patch.object(bm, "is_windows_host", return_value=True), mock.patch.object(
-            bm, "get_processes", return_value=[manager]
+            bm, "get_processes", return_value=self.complete_inventory(manager, bm.ProcessInfo(77, "worker.exe", creation_time=51.0))
         ), mock.patch.object(bm, "confirm_action", return_value=True), mock.patch.object(
             bm, "popen_new_console"
         ) as popen, mock.patch("builtins.print"):
@@ -1527,10 +1866,9 @@ class ControlBoundaryTests(IsolatedAppMixin, unittest.TestCase):
         popen.assert_not_called()
         self.assertTrue(lock.exists())
 
-    def test_control_action_lock_recovers_stale_file(self) -> None:
+    def test_control_action_lock_does_not_auto_delete_stale_file(self) -> None:
         cfg = self.config_for(self.base)
         cfg["control_action_lock_timeout_seconds"] = 1
-        cfg["control_action_lock_stale_seconds"] = 60
         lock = bm.control_action_lock_path()
         lock.write_text(
             json.dumps({
@@ -1542,26 +1880,41 @@ class ControlBoundaryTests(IsolatedAppMixin, unittest.TestCase):
             }),
             encoding="utf-8",
         )
-        with bm.control_action_lock("NewBot", "start", cfg):
-            data = bm.read_control_action_lock()
-            self.assertTrue(data["active"])
-            self.assertEqual(data["bot_name"], "NewBot")
-        self.assertFalse(lock.exists())
+        with self.assertRaises(TimeoutError):
+            with bm.control_action_lock("NewBot", "start", cfg):
+                self.fail("A stale-looking lock must require manual review")
+        self.assertTrue(lock.exists())
+
+    def test_lock_cleanup_does_not_remove_successor_owner(self) -> None:
+        cfg = self.config_for(self.base)
+        control_lock = bm.control_action_lock_path()
+        with bm.control_action_lock("LiveBot", "start", cfg):
+            successor = {"lock_id": "successor", "pid": 999, "created_at_epoch": time.time()}
+            control_lock.write_text(json.dumps(successor), encoding="utf-8")
+        self.assertEqual(json.loads(control_lock.read_text(encoding="utf-8"))["lock_id"], "successor")
+        control_lock.unlink()
+
+        state_lock = bm.state_dir() / ".write.lock"
+        with bm.state_write_lock():
+            successor = {"lock_id": "successor", "pid": 999, "created_at": time.time()}
+            state_lock.write_text(json.dumps(successor), encoding="utf-8")
+        self.assertEqual(json.loads(state_lock.read_text(encoding="utf-8"))["lock_id"], "successor")
+        state_lock.unlink()
 
 
 class LauncherExportHotfixTests(IsolatedAppMixin, unittest.TestCase):
-    def test_export_diagnostics_does_not_execute_child_export_or_start_scripts(self) -> None:
+    def test_export_support_does_not_execute_child_export_or_start_scripts(self) -> None:
         bots_root = self.base / "Bots"
         folder = bots_root / "ExporterOnlyBot"
         folder.mkdir(parents=True)
-        export_script = folder / "RUN_EXPORT_TO_CHATGPT.bat"
+        export_script = folder / "RUN_EXPORT_TO_SUPPORT.bat"
         export_script.write_text("@echo SHOULD_NOT_RUN\n", encoding="utf-8")
         cfg = self.config_for(bots_root)
 
         with mock.patch.object(bm, "get_processes", return_value=[]), mock.patch.object(
             bm, "popen_new_console"
         ) as popen, mock.patch.object(bm.subprocess, "run") as run:
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         self.assertTrue(path.exists())
         popen.assert_not_called()
@@ -1571,10 +1924,10 @@ class LauncherExportHotfixTests(IsolatedAppMixin, unittest.TestCase):
         selected = audit["ExporterOnlyBot"]["selected_start"]
         self.assertEqual(selected, "")
         candidates = audit["ExporterOnlyBot"]["start_candidates"]
-        export_candidate = next(item for item in candidates if "RUN_EXPORT_TO_CHATGPT" in item["path"])
+        export_candidate = next(item for item in candidates if "RUN_EXPORT_TO_SUPPORT" in item["path"])
         self.assertTrue(export_candidate["blocked"])
 
-    def test_export_diagnostics_does_not_rewrite_registry_runtime_or_selftest_state_by_default(self) -> None:
+    def test_export_support_does_not_rewrite_registry_runtime_or_selftest_state_by_default(self) -> None:
         bots_root = self.base / "Bots"
         folder = bots_root / "StableBot"
         folder.mkdir(parents=True)
@@ -1586,7 +1939,7 @@ class LauncherExportHotfixTests(IsolatedAppMixin, unittest.TestCase):
         cfg = self.config_for(bots_root)
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         self.assertTrue(path.exists())
         self.assertEqual(json.loads(bm.registry_path().read_text(encoding="utf-8")), registry_original)
@@ -1609,7 +1962,7 @@ class LauncherExportHotfixTests(IsolatedAppMixin, unittest.TestCase):
         cfg["export_refresh_registry"] = True
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         self.assertEqual(json.loads(bm.registry_path().read_text(encoding="utf-8")), original)
         with zipfile.ZipFile(path) as archive:
@@ -1625,7 +1978,7 @@ class LauncherExportHotfixTests(IsolatedAppMixin, unittest.TestCase):
         cfg = self.config_for(bots_root)
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         with zipfile.ZipFile(path) as archive:
             selftest = json.loads(archive.read("selftest.json"))
@@ -1645,7 +1998,7 @@ class LauncherExportHotfixTests(IsolatedAppMixin, unittest.TestCase):
             target.write_bytes(corrupt)
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         self.assertTrue(path.exists())
         for target in targets:
@@ -1674,7 +2027,7 @@ class LauncherExportHotfixTests(IsolatedAppMixin, unittest.TestCase):
     def test_cli_export_does_not_persist_config_migration(self) -> None:
         bots_root = self.base / "Bots"
         bots_root.mkdir()
-        old_config = {"version": bm.CONFIG_VERSION - 1, "bots_root": str(bots_root), "diagnostic_max_files": 20}
+        old_config = {"version": bm.CONFIG_VERSION - 1, "bots_root": str(bots_root), "support_max_files": 20}
         bm.config_path().parent.mkdir(parents=True, exist_ok=True)
         bm.config_path().write_text(json.dumps(old_config, indent=2), encoding="utf-8")
 
@@ -1683,7 +2036,7 @@ class LauncherExportHotfixTests(IsolatedAppMixin, unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(bm.config_path().read_text(encoding="utf-8")), old_config)
-        self.assertTrue(list(bm.exports_dir().glob("botops_diagnostic_*.zip")))
+        self.assertTrue(list(bm.exports_dir().glob("botops_support_*.zip")))
 
     def test_export_does_not_claim_invalid_manual_heartbeat_as_selected(self) -> None:
         bots_root = self.base / "Bots"
@@ -1708,7 +2061,7 @@ class LauncherExportHotfixTests(IsolatedAppMixin, unittest.TestCase):
         cfg = self.config_for(bots_root)
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         with zipfile.ZipFile(path) as archive:
             audit = json.loads(archive.read("health_audit.json"))["ManualBot"]
@@ -1717,15 +2070,15 @@ class LauncherExportHotfixTests(IsolatedAppMixin, unittest.TestCase):
         self.assertEqual(audit["selected_heartbeat"], "")
         self.assertNotEqual(audit["configured_manual_heartbeat"], "")
 
-    def test_export_diagnostics_uses_unique_zip_path_when_called_quickly(self) -> None:
+    def test_export_support_uses_unique_zip_path_when_called_quickly(self) -> None:
         bots_root = self.base / "Bots"
         bots_root.mkdir()
         cfg = self.config_for(bots_root)
         with mock.patch.object(bm, "get_processes", return_value=[]), mock.patch.object(
             bm, "local_stamp_for_filename", return_value="20260623_120000_000"
         ):
-            first = bm.export_diagnostics(cfg)
-            second = bm.export_diagnostics(cfg)
+            first = bm.export_support(cfg)
+            second = bm.export_support(cfg)
         self.assertNotEqual(first, second)
         self.assertTrue(first.exists())
         self.assertTrue(second.exists())
@@ -1747,138 +2100,7 @@ class LauncherExportHotfixTests(IsolatedAppMixin, unittest.TestCase):
             self.assertEqual(bm.find_python_for_bot(folder), bm.cmd_quote(str(venv_python)))
 
 
-class AssetMetadataTests(IsolatedAppMixin, unittest.TestCase):
-    def _record(self, *, asset_id: str, path: str, role: str, sha256: str, size_bytes: int) -> dict:
-        return {
-            "asset_id": asset_id,
-            "path": path,
-            "title": path,
-            "purpose": "test asset",
-            "asset_class": "documentation" if path.endswith(".md") else "manifest",
-            "role": role,
-            "format": Path(path).suffix.lstrip("."),
-            "project_slug": bm.PROJECT_SLUG,
-            "version": bm.APP_VERSION,
-            "status": "current",
-            "sensitivity": "project-internal",
-            "source_of_truth": role in {"source-of-truth", "asset-registry"},
-            "tags": ["botops-manager", "asset-metadata"],
-            "aliases": [path],
-            "lineage": "new in test fixture",
-            "created_cdt": "2026-07-13 01:00:00 PM CDT / America/Chicago",
-            "modified_cdt": "2026-07-13 01:00:00 PM CDT / America/Chicago",
-            "size_bytes": size_bytes,
-            "sha256": sha256,
-        }
-
-    def _write_complete_fixture_manifest(self) -> None:
-        source = self.manager_root / "README_RUN_FIRST.md"
-        source.write_text(
-            "# README\nAsset metadata: ID BOTOPS-TEST-README; status current.\n",
-            encoding="utf-8",
-        )
-        payload = {
-            "schema": bm.ASSET_MANIFEST_SCHEMA,
-            "project_slug": bm.PROJECT_SLUG,
-            "version": bm.APP_VERSION,
-            "release_asset": {
-                "asset_id": bm.RELEASE_ASSET_ID,
-                "path": f"BotOps_Manager_v{bm.APP_VERSION}.zip",
-                "version": bm.APP_VERSION,
-                "status": "current",
-                "sensitivity": "project-internal",
-                "tags": ["botops-manager", "release"],
-                "lineage": "supersedes prior release",
-            },
-            "assets": [
-                self._record(
-                    asset_id="BOTOPS-TEST-README",
-                    path="README_RUN_FIRST.md",
-                    role="runbook",
-                    sha256=bm.sha256_file(source),
-                    size_bytes=source.stat().st_size,
-                ),
-                self._record(
-                    asset_id="BOTOPS-TEST-MANIFEST",
-                    path="MANIFEST.json",
-                    role="asset-registry",
-                    sha256="SELF_REFERENTIAL_SEE_RELEASE_SHA256_SIDECAR",
-                    size_bytes=0,
-                ),
-            ],
-        }
-        manifest = self.manager_root / "MANIFEST.json"
-        for _ in range(20):
-            manifest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-            size = manifest.stat().st_size
-            if payload["assets"][1]["size_bytes"] == size:
-                break
-            payload["assets"][1]["size_bytes"] = size
-        manifest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-
-    def test_complete_manifest_reconciles_and_indexes_source_inventory(self) -> None:
-        self._write_complete_fixture_manifest()
-
-        result = bm.build_asset_metadata_reconciliation()
-        inventory = bm.build_source_package_inventory(copy.deepcopy(bm.DEFAULT_CONFIG))
-
-        self.assertEqual(result["status"], "PASS")
-        self.assertEqual(result["summary"]["missing_count"], 0)
-        readme = next(item for item in inventory["files"] if item["path"] == "README_RUN_FIRST.md")
-        self.assertEqual(readme["asset_id"], "BOTOPS-TEST-README")
-        self.assertEqual(inventory["manifest_schema"], bm.ASSET_MANIFEST_SCHEMA)
-
-    def test_reconciliation_detects_stale_hash_and_missing_record(self) -> None:
-        self._write_complete_fixture_manifest()
-        (self.manager_root / "README_RUN_FIRST.md").write_text(
-            "# README changed after release\nAsset metadata: ID BOTOPS-TEST-README.\n",
-            encoding="utf-8",
-        )
-        (self.manager_root / "UNINDEXED.txt").write_text("new file\n", encoding="utf-8")
-
-        result = bm.build_asset_metadata_reconciliation()
-
-        self.assertEqual(result["status"], "FAIL")
-        self.assertIn("UNINDEXED.txt", result["missing_records"])
-        self.assertTrue(any("README_RUN_FIRST.md" in item for item in result["stale_records"]))
-
-    def test_reconciliation_detects_duplicate_stable_asset_ids(self) -> None:
-        self._write_complete_fixture_manifest()
-        manifest = json.loads((self.manager_root / "MANIFEST.json").read_text(encoding="utf-8"))
-        manifest["assets"][1]["asset_id"] = manifest["assets"][0]["asset_id"]
-        (self.manager_root / "MANIFEST.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-
-        result = bm.build_asset_metadata_reconciliation()
-
-        self.assertEqual(result["status"], "FAIL")
-        self.assertTrue(any("duplicate asset IDs" in item for item in result["conflicts"]))
-
-    def test_diagnostic_export_embeds_metadata_and_writes_hash_sidecar(self) -> None:
-        bots_root = self.base / "Bots"
-        bots_root.mkdir()
-        cfg = self.config_for(bots_root)
-
-        with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
-
-        sidecar = path.with_name(path.name + ".sha256.txt")
-        self.assertTrue(path.name.startswith(f"botops_diagnostic_v{bm.APP_VERSION}_"))
-        self.assertTrue(sidecar.exists())
-        expected_hash = bm.sha256_file(path)
-        self.assertTrue(sidecar.read_text(encoding="utf-8").startswith(f"{expected_hash}  {path.name}\n"))
-        with zipfile.ZipFile(path) as archive:
-            comment = json.loads(archive.comment.decode("utf-8"))
-            status = json.loads(archive.read("status.json"))
-        self.assertEqual(comment["asset_family_id"], bm.DIAGNOSTIC_ASSET_FAMILY_ID)
-        self.assertEqual(comment["project_run_id"], bm.RUN_ID)
-        self.assertEqual(status["asset_metadata"]["asset_id"], comment["asset_id"])
-        self.assertEqual(status["asset_metadata"]["hash_delivery"], sidecar.name)
-        self.assertTrue(status["export_contract"]["embedded_zip_metadata_comment"])
-        self.assertTrue(status["export_contract"]["sha256_sidecar_requested"])
-
-
-
-class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
+class AtomicSupportExportTests(IsolatedAppMixin, unittest.TestCase):
     def test_export_is_atomic_capped_and_integrity_checked(self) -> None:
         bots_root = self.base / "Bots"
         folder = bots_root / "Stable Bot With Spaces"
@@ -1887,42 +2109,22 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
         cfg = self.config_for(bots_root)
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         self.assertTrue(path.exists())
         self.assertEqual(list(bm.exports_dir().glob("*.zip.tmp")), [])
         with zipfile.ZipFile(path) as archive:
             self.assertIsNone(archive.testzip())
             names = archive.namelist()
-            self.assertLessEqual(len(names), cfg["diagnostic_max_files"])
+            self.assertLessEqual(len(names), cfg["support_max_files"])
             status = json.loads(archive.read("status.json"))
             self.assertIn("health_state_snapshot", status)
         self.assertTrue(status["export_contract"]["atomic_publish"])
         self.assertTrue(status["export_contract"]["integrity_test_before_publish"])
-        self.assertEqual(status["drive_vault_reference"]["project_path"], "ChatGPT_Project_Vault/30_UTILITIES_AND_WINDOWS_TOOLS/BotOps_Manager")
-        self.assertEqual(status["drive_vault_reference"]["latest_build_path"], "ChatGPT_Project_Vault/30_UTILITIES_AND_WINDOWS_TOOLS/BotOps_Manager/02_LATEST_BUILD")
-        self.assertFalse(status["drive_vault_reference"]["runtime_dependency"])
+        self.assertIn("security_boundary", status)
         self.assertEqual(status["resource_guardrails"]["queue_backpressure"], "not applicable; BotOps is a low-volume local manager without producer/consumer queues")
 
-    def test_drive_vault_config_is_sanitized_and_reported_in_export(self) -> None:
-        bots_root = self.base / "Bots"
-        bots_root.mkdir()
-        cfg = self.config_for(bots_root)
-        (self.manager_root / "MANIFEST.csv").write_text("path,role,status\n", encoding="utf-8")
-        cfg["drive_vault_project"] = "../Unsafe Project!!"
-        cfg = bm._coerce_config(cfg)
-
-        with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
-
-        with zipfile.ZipFile(path) as archive:
-            status = json.loads(archive.read("status.json"))
-            names = archive.namelist()
-        self.assertIn("MANIFEST.csv", names)
-        self.assertEqual(status["drive_vault_reference"]["project"], "Unsafe_Project")
-        self.assertTrue(status["drive_vault_reference"]["latest_build_path"].endswith("/Unsafe_Project/02_LATEST_BUILD"))
-
-    def test_export_respects_configured_file_cap_with_optional_log_content(self) -> None:
+    def test_export_respects_configured_file_cap_without_log_content(self) -> None:
         bots_root = self.base / "Bots"
         for index in range(5):
             folder = bots_root / f"Bot{index}"
@@ -1930,22 +2132,18 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
             logs.mkdir(parents=True)
             (folder / "start.bat").write_text("@echo off\n", encoding="utf-8")
             (logs / "events.log").write_text("heartbeat\n", encoding="utf-8")
-        for filename in ("README_RUN_FIRST.md", "CHANGELOG.md", "KNOWN_GOOD_STATE.md", "TRANSFER_BRIEF.md", "DEEP_CHECK_REPORT.md", "MANIFEST.json"):
-            (self.manager_root / filename).write_text(f"{filename}\n", encoding="utf-8")
         cfg = self.config_for(bots_root)
-        cfg["diagnostics_include_log_content"] = True
-        cfg["diagnostic_max_files"] = 12
+        cfg["support_max_files"] = 12
         cfg = bm._coerce_config(cfg)
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         with zipfile.ZipFile(path) as archive:
             self.assertIsNone(archive.testzip())
             names = archive.namelist()
             self.assertLessEqual(len(names), 12)
-            review = archive.read("REVIEW_SUMMARY.txt").decode("utf-8")
-        self.assertIn("diagnostic_max_files=12 reached", review)
+        self.assertFalse(any(name.startswith("bot_log_tails/") for name in names))
 
     def test_export_status_json_reports_final_entry_plan_and_omissions(self) -> None:
         bots_root = self.base / "Bots"
@@ -1956,12 +2154,11 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
             (folder / "start.bat").write_text("@echo off\n", encoding="utf-8")
             (logs / "events.log").write_text("heartbeat\n", encoding="utf-8")
         cfg = self.config_for(bots_root)
-        cfg["diagnostics_include_log_content"] = True
-        cfg["diagnostic_max_files"] = 12
+        cfg["support_max_files"] = 12
         cfg = bm._coerce_config(cfg)
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
@@ -1969,26 +2166,21 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
         self.assertLessEqual(len(names), 12)
         self.assertEqual(status["export_plan_final"]["entry_count"], len(names))
         self.assertEqual(status["export_plan_final"]["entry_names"], names)
-        self.assertGreaterEqual(status["export_plan_final"]["omission_count"], 1)
+        self.assertGreaterEqual(status["export_plan_final"]["omission_count"], 0)
         self.assertTrue(status["export_plan_final"]["finalized_before_zip_open"])
 
-    def test_export_status_json_contains_environment_and_source_inventory(self) -> None:
+    def test_export_status_json_contains_environment_snapshot(self) -> None:
         bots_root = self.base / "Bots"
         bots_root.mkdir()
-        (self.manager_root / "README_RUN_FIRST.md").write_text("readme\n", encoding="utf-8")
         cfg = self.config_for(bots_root)
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         with zipfile.ZipFile(path) as archive:
             status = json.loads(archive.read("status.json"))
         self.assertIn("environment_snapshot", status)
         self.assertIn("python_version", status["environment_snapshot"])
-        self.assertIn("source_package_inventory", status)
-        inventory = status["source_package_inventory"]
-        self.assertEqual(inventory["status"], "ok")
-        self.assertTrue(any(item.get("path") == "README_RUN_FIRST.md" for item in inventory["files"]))
 
     def test_export_status_json_reports_path_targeting(self) -> None:
         bots_root = self.base / "Bots"
@@ -1997,7 +2189,7 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
         cfg["_bots_root_source"] = "cli --root"
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         with zipfile.ZipFile(path) as archive:
             status = json.loads(archive.read("status.json"))
@@ -2009,16 +2201,16 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
 
     def test_export_status_json_contains_omission_control_ledger(self) -> None:
         bots_root = self.base / "Bots"
-        trade = bots_root / "TradeBot"
+        service = bots_root / "ServiceWorker"
         utility = bots_root / "UtilityFolder"
-        trade.mkdir(parents=True)
+        service.mkdir(parents=True)
         utility.mkdir(parents=True)
-        (trade / "start_trade_bot.bat").write_text("@echo off\n", encoding="utf-8")
+        (service / "start_service.bat").write_text("@echo off\n", encoding="utf-8")
         (utility / "requirements.txt").write_text("# utility\n", encoding="utf-8")
         cfg = self.config_for(bots_root)
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         with zipfile.ZipFile(path) as archive:
             status = json.loads(archive.read("status.json"))
@@ -2026,8 +2218,8 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
         self.assertEqual(ledger["schema"], "omission_control_ledger_v1")
         self.assertEqual(ledger["bots_root"]["scan_write_guard"], "enabled_no_rewrite_when_root_missing")
         self.assertEqual(ledger["discovered_items_count"], 2)
-        self.assertTrue(any(item["item"] == "TradeBot" for item in ledger["discovered_items"]))
-        self.assertIn("diagnostic export plan capped and reported", [item["check"] for item in ledger["checklist"]])
+        self.assertTrue(any(item["item"] == "ServiceWorker" for item in ledger["discovered_items"]))
+        self.assertIn("support export plan capped and reported", [item["check"] for item in ledger["checklist"]])
 
     def test_report_only_selftest_missing_config_is_warning_not_failure(self) -> None:
         bots_root = self.base / "Bots"
@@ -2035,7 +2227,8 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
         cfg = self.config_for(bots_root)
 
         current = bm.ProcessInfo(os.getpid(), "python.exe", creation_time=1.0)
-        with mock.patch.object(bm, "get_processes", return_value=[current]):
+        corroborating = bm.ProcessInfo(os.getpid() + 1, "worker.exe", creation_time=2.0)
+        with mock.patch.object(bm, "get_processes", return_value=self.complete_inventory(current, corroborating)):
             result = bm.run_selftest(cfg, {}, persist=False)
 
         config_check = next(item for item in result["checks"] if item["name"] == "Config JSON")
@@ -2047,20 +2240,20 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
         bots_root = self.base / "Bots"
         bots_root.mkdir()
         cfg = self.config_for(bots_root)
-        stale = bm.exports_dir() / "botops_diagnostic_interrupted.zip.tmp"
+        stale = bm.exports_dir() / "botops_support_interrupted.zip.tmp"
         stale.parent.mkdir(parents=True, exist_ok=True)
         stale.write_text("forensic evidence", encoding="utf-8")
         old_time = time.time() - 72 * 3600
         os.utime(stale, (old_time, old_time))
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         self.assertTrue(path.exists())
         self.assertTrue(stale.exists())
         self.assertEqual(stale.read_text(encoding="utf-8"), "forensic evidence")
 
-    def test_export_contains_norton_status_operation_trace_and_config_assurance(self) -> None:
+    def test_export_contains_security_boundary_operation_trace_and_config_assurance(self) -> None:
         bots_root = self.base / "Bots"
         bots_root.mkdir()
         cfg = self.config_for(bots_root)
@@ -2068,14 +2261,14 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
         cfg["_config_unknown_keys"] = ["custom_future_toggle"]
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         with zipfile.ZipFile(path) as archive:
             status = json.loads(archive.read("status.json"))
-        norton = status["norton_status"]
-        self.assertEqual(norton["schema"], bm.NORTON_STATUS_SCHEMA)
-        self.assertFalse(norton["packaging_flags"]["execution_policy_bypass"])
-        self.assertEqual(norton["host_validation"]["result"], "manual_external_validation_required")
+        boundary = status["security_boundary"]
+        self.assertEqual(boundary["schema"], bm.SECURITY_BOUNDARY_SCHEMA)
+        self.assertFalse(boundary["runtime_flags"]["execution_policy_bypass"])
+        self.assertEqual(boundary["security_software_inspection"], "not_performed")
         trace = status["operation_trace"]
         self.assertIn(trace["terminal_status"], {"completed", "completed_with_collector_warnings"})
         self.assertEqual(trace["clock_sources"]["duration"], "time.monotonic")
@@ -2083,7 +2276,7 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
         self.assertIn("custom_future_toggle", status["custom_input_assurance"]["config"]["unknown_keys"])
         self.assertFalse(status["export_contract"]["stale_temp_cleanup_applied"])
         exit_status = status["work_window_exit"]
-        self.assertEqual(exit_status["schema"], "diagnostic_work_window_exit_v1")
+        self.assertEqual(exit_status["schema"], "support_work_window_exit_v1")
         self.assertEqual(exit_status["actual_tool_timeouts"], [])
         self.assertIn("No tool timeout", exit_status["timeout_statement"])
         self.assertTrue(exit_status["completed_verified"])
@@ -2095,15 +2288,15 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
         cfg = self.config_for(bots_root)
 
         with mock.patch.object(bm, "get_processes", return_value=[]), mock.patch.object(
-            bm, "build_diagnostic_export_plan", side_effect=RuntimeError("synthetic collector failure")
+            bm, "build_support_export_plan", side_effect=RuntimeError("synthetic collector failure")
         ):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         with zipfile.ZipFile(path) as archive:
             self.assertIsNone(archive.testzip())
             names = archive.namelist()
             status = json.loads(archive.read("status.json"))
-        self.assertLessEqual(len(names), cfg["diagnostic_max_files"])
+        self.assertLessEqual(len(names), cfg["support_max_files"])
         self.assertTrue(status["fallback_bundle_used"])
         self.assertTrue(status["fallback_bundle"]["used"])
         self.assertEqual(status["operation_trace"]["terminal_status"], "completed_with_fallback")
@@ -2115,9 +2308,9 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
         cfg = self.config_for(bots_root)
 
         with mock.patch.object(bm, "get_processes", return_value=[]), mock.patch.object(
-            bm, "build_diagnostic_export_plan", side_effect=RuntimeError("synthetic plan failure")
+            bm, "build_support_export_plan", side_effect=RuntimeError("synthetic plan failure")
         ):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         with zipfile.ZipFile(path) as archive:
             status = json.loads(archive.read("status.json"))
@@ -2132,21 +2325,156 @@ class AtomicDiagnosticExportTests(IsolatedAppMixin, unittest.TestCase):
         bots_root = self.base / "Bots"
         bots_root.mkdir()
         cfg = self.config_for(bots_root)
-        cfg["api_key"] = "plain-secret-that-should-not-survive"
-        cfg["_config_unknown_keys"] = ["api_key"]
+        cfg["api_key"] = 123456789
+        cfg["account_id"] = "account-0042"
+        cfg["client_id"] = 987654321
+        cfg["_config_unknown_keys"] = ["account_id", "api_key", "client_id"]
 
         with mock.patch.object(bm, "get_processes", return_value=[]):
-            path = bm.export_diagnostics(cfg)
+            path = bm.export_support(cfg)
 
         with zipfile.ZipFile(path) as archive:
             exported_cfg = json.loads(archive.read("bot_manager_config.json"))
         self.assertEqual(exported_cfg["api_key"], "***REDACTED_PRESENT***")
-        self.assertNotIn("plain-secret-that-should-not-survive", json.dumps(exported_cfg))
+        self.assertEqual(exported_cfg["account_id"], "***REDACTED_PRESENT***")
+        self.assertEqual(exported_cfg["client_id"], "***REDACTED_PRESENT***")
+        exported_text = json.dumps(exported_cfg)
+        self.assertNotIn("123456789", exported_text)
+        self.assertNotIn("account-0042", exported_text)
+        self.assertNotIn("987654321", exported_text)
+
+    def test_support_plan_rejects_unsafe_names_duplicates_and_byte_overflow(self) -> None:
+        cfg = self.config_for(self.base / "Bots")
+        cfg["support_max_entry_bytes"] = 65_536
+        cfg["support_max_total_bytes"] = 65_536
+        cfg = bm._coerce_config(cfg)
+        with self.assertRaises(RuntimeError):
+            bm.validate_support_plan([(r"C:/outside.txt", b"x")], cfg)
+        with self.assertRaises(RuntimeError):
+            bm.validate_support_plan([(r"\\server\share\outside.txt", b"x")], cfg)
+        with self.assertRaises(RuntimeError):
+            bm.validate_support_plan([("status.json", b"x"), ("STATUS.JSON", b"y")], cfg)
+        for unsafe_name in (
+            "CON",
+            "con.txt",
+            "CONOUT$",
+            "COM9",
+            "COM\u00b9.txt",
+            "LPT9.txt",
+            "name.",
+            "name ",
+            "line\nbreak.txt",
+        ):
+            with self.subTest(unsafe_name=unsafe_name), self.assertRaises(RuntimeError):
+                bm.validate_support_plan([(unsafe_name, b"x")], cfg)
+        with self.assertRaises(RuntimeError):
+            bm.validate_support_plan([("\u00e9.txt", b"x"), ("e\u0301.txt", b"y")], cfg)
+        with self.assertRaises(RuntimeError):
+            bm.validate_support_plan([("large.bin", b"x" * 65_537)], cfg)
+        with self.assertRaises(RuntimeError):
+            bm.validate_support_plan([("one.bin", b"x" * 40_000), ("two.bin", b"y" * 40_000)], cfg)
+
+    def test_atomic_writer_never_overwrites_existing_destination(self) -> None:
+        cfg = self.config_for(self.base / "Bots")
+        destination = bm.exports_dir() / "existing.zip"
+        destination.write_bytes(b"preserve")
+        with self.assertRaises(RuntimeError):
+            bm.write_atomic_support_zip(destination, [("status.json", b"{}\n")], cfg)
+        self.assertEqual(destination.read_bytes(), b"preserve")
+
+    def test_atomic_writer_keeps_exclusive_descriptor_through_fsync_and_validation(self) -> None:
+        cfg = self.config_for(self.base / "Bots")
+        destination = bm.exports_dir() / "descriptor-safe.zip"
+        real_zipfile = bm.zipfile.ZipFile
+        observed_streams = []
+
+        def inspected_zipfile(file, *args, **kwargs):
+            self.assertNotIsInstance(file, (str, Path))
+            self.assertTrue(hasattr(file, "fileno"))
+            observed_streams.append(file)
+            return real_zipfile(file, *args, **kwargs)
+
+        with mock.patch.object(bm.zipfile, "ZipFile", side_effect=inspected_zipfile), mock.patch.object(
+            bm.os, "fsync", wraps=bm.os.fsync
+        ) as fsync:
+            bm.write_atomic_support_zip(destination, [("status.json", b"{}\n")], cfg)
+
+        self.assertTrue(destination.is_file())
+        self.assertEqual(len(observed_streams), 2)
+        self.assertIs(observed_streams[0], observed_streams[1])
+        fsync.assert_called_once()
+
+    def test_export_rejects_reparse_like_managed_exports_directory(self) -> None:
+        cfg = self.config_for(self.base / "Bots")
+        managed = bm.exports_dir()
+        destination = managed / "new.zip"
+        original = bm.path_is_reparse_or_symlink
+
+        def looks_linked(path: Path) -> bool:
+            return Path(path) == managed or original(Path(path))
+
+        with mock.patch.object(bm, "path_is_reparse_or_symlink", side_effect=looks_linked):
+            with self.assertRaises(RuntimeError):
+                bm.write_atomic_support_zip(destination, [("status.json", b"{}\n")], cfg)
+
+    def test_report_only_export_creates_no_state_or_log_directory(self) -> None:
+        bots_root = self.base / "Bots"
+        bots_root.mkdir()
+        cfg = self.config_for(bots_root)
+        with mock.patch.object(bm, "get_processes", return_value=[]):
+            path = bm.export_support(cfg)
+        self.assertTrue(path.is_file())
+        self.assertFalse((self.manager_root / "state").exists())
+        self.assertFalse((self.manager_root / "logs").exists())
+        self.assertTrue((self.manager_root / "exports").is_dir())
+
+    def test_report_only_export_does_not_append_preexisting_manager_log(self) -> None:
+        bots_root = self.base / "Bots"
+        bots_root.mkdir()
+        cfg = self.config_for(bots_root)
+        log_path = self.manager_root / "logs" / "bot_manager.log"
+        log_path.parent.mkdir()
+        original = b"existing manager evidence\n"
+        log_path.write_bytes(original)
+        with mock.patch.object(bm, "get_processes", return_value=[]):
+            bm.export_support(cfg)
+        self.assertEqual(log_path.read_bytes(), original)
+
+    def test_tail_and_json_reads_are_bounded(self) -> None:
+        huge_log = self.base / "huge.log"
+        huge_log.write_bytes(b"x" * 200_000)
+        self.assertLessEqual(len(bm.tail_file(huge_log, lines=10, max_bytes=4_096)), 4_096)
+        huge_json = self.base / "huge.json"
+        huge_json.write_bytes(b"{" + b" " * bm.JSON_INPUT_MAX_BYTES + b"}")
+        self.assertEqual(bm.load_json(huge_json, {"safe": True}, "oversized", recover=False), {"safe": True})
+
+    def test_shared_bounded_reader_protects_package_and_control_lock_json(self) -> None:
+        valid = self.base / "valid.json"
+        valid.write_text('{"safe": true}\n', encoding="utf-8")
+        self.assertEqual(bm.read_bounded_json(valid, 1024), {"safe": True})
+
+        oversized_package = self.base / "package.json"
+        oversized_package.write_bytes(b"{" + b" " * bm.JSON_INPUT_MAX_BYTES + b"}")
+        self.assertFalse(bm.package_has_start_script(oversized_package))
+
+        lock_path = bm.control_action_lock_path()
+        lock_path.write_bytes(b"{" + b" " * bm.JSON_INPUT_MAX_BYTES + b"}")
+        lock = bm.read_control_action_lock()
+        self.assertTrue(lock["active"])
+        self.assertNotIn("secret", lock)
+
+        with self.assertRaises(ValueError):
+            bm.read_bounded_regular_bytes(self.base, 1024)
+
+    def test_run_id_sanitizer_is_filename_safe_and_bounded(self) -> None:
+        cleaned = bm._sanitize_run_id(r"..\unsafe/path:$secret " + "x" * 200)
+        self.assertRegex(cleaned, r"^[A-Za-z0-9_-]{1,48}$")
+        self.assertNotIn("..", cleaned)
 
     def test_cleanup_stale_temp_exports_keeps_recent_temp_files(self) -> None:
         cfg = self.config_for(self.base / "Bots")
-        old_tmp = bm.exports_dir() / "botops_diagnostic_old.zip.tmp"
-        new_tmp = bm.exports_dir() / "botops_diagnostic_new.zip.tmp"
+        old_tmp = bm.exports_dir() / "botops_support_old.zip.tmp"
+        new_tmp = bm.exports_dir() / "botops_support_new.zip.tmp"
         old_tmp.parent.mkdir(parents=True, exist_ok=True)
         old_tmp.write_text("old", encoding="utf-8")
         new_tmp.write_text("new", encoding="utf-8")

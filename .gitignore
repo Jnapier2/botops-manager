@@ -8,10 +8,9 @@ venv/
 state/
 logs/
 exports/
-diagnostics/
+support/
 reports/
 *.log
 *.zip
-*.sha256.txt
 .idea/
 .vscode/

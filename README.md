@@ -1,25 +1,23 @@
 # BotOps Manager
 
-**A safety-first local operations console for monitoring and controlling Windows automation folders.**
+A safety-first local operations console for monitoring and controlling independent Windows automation folders.
 
-BotOps Manager turns a directory of independently launched tools into one observable workspace. It discovers candidate launchers, scores their safety, reads structured health contracts, tracks process identity, and produces privacy-conscious diagnostics without reading application credentials or changing business logic.
-
-## Why it matters
-
-Folder-based automation is convenient until an operator cannot tell which process is healthy, which launcher is safe, or whether a stop action will affect the wrong program. BotOps Manager adds an operational control plane while keeping every managed project independent.
+BotOps Manager turns a directory of separately launched tools into one observable workspace. It discovers candidate launchers, scores their safety, reads structured health contracts, tracks process identity, and creates privacy-conscious support exports without reading application credentials or changing child-project logic.
 
 ## Engineering highlights
 
-- **Fail-closed launcher selection:** build, deploy, export, setup, emergency-stop, and other unsafe candidates are blocked from automatic start selection.
-- **Identity-bound process control:** force-stop is limited to process trees started by BotOps or explicitly adopted after review.
-- **Structured health contracts:** applications can publish small JSON health/status files; log freshness remains a compatible fallback.
-- **Adaptive monitoring:** repeated observations can refine stale thresholds while bounded defaults and hard limits remain in force.
-- **Safe diagnostics:** exports use bounded inventories and omit operational log content by default.
-- **Portable runtime:** Python 3.10+ standard library only; no service, installer, or cloud account required.
+- **Fail-closed launcher selection:** setup, build, cleanup, export, test, broad-stop, and other unsafe candidates are blocked from automatic start selection; incomplete directory scans preserve prior registry and ownership state.
+- **Re-audited process control:** start and project-scoped stop scripts are rechecked for containment, file type, role, and score immediately before launch.
+- **Structured health contracts:** child applications can publish small JSON health files; provenance-ranked log freshness remains a fallback.
+- **Adaptive monitoring:** repeated observations can refine stale thresholds while bounded defaults, hysteresis, and hard limits remain active.
+- **Report-only support:** exports are atomic, capped, redacted, integrity-tested, and non-mutating by default.
+- **Portable runtime:** Python 3.10+ standard library only; no service, installer, cloud account, or compiled binary is required.
 
-## Safety model
+## Safety boundary
 
-BotOps is monitor-only for external processes by default. It does not read exchange credentials, place orders, alter strategy files, edit source code, disable endpoint protection, or create system-wide persistence. Start and stop actions remain explicit and confirmation-gated.
+BotOps is monitor-only for externally started processes by default. It does not read child-project credentials, call external services on their behalf, edit their source or configuration, install persistence, weaken endpoint protection, or restart a project automatically.
+
+Start and stop-script actions are explicit and confirmation-gated. Duplicate checks require an explicitly complete Windows process inventory. BotOps records start ownership only when the launched process remains live and the same PID and creation identity are verified both immediately and after the settle window. Force termination is deliberately disabled in this public edition because a persisted PID alone cannot eliminate Windows process-reuse and time-of-check/time-of-use risk.
 
 ## Quick start
 
@@ -36,23 +34,27 @@ For the interactive dashboard, run `BotOps_Manager.bat` or:
 python bot_manager.py --root "C:\path\to\automation" menu
 ```
 
-The default root is `C:\Bots`. Use `--root` to inspect another directory without changing the saved configuration.
+The default root is `C:\Bots`. Use `--root` to inspect another directory without persisting that override.
+
+## Support export
+
+```powershell
+python bot_manager.py --root "C:\path\to\automation" export
+```
+
+The export contains bounded status, launcher-audit, health-audit, self-test, and redacted state summaries. Child-project log bodies are excluded; a byte-bounded, redacted manager-log tail is included only when one already exists. Per-entry and total byte limits, Windows-safe archive names, descriptor-bound staging, no-overwrite publication, and link/reparse checks are enforced. Review every ZIP before sharing it; no support bundle is uploaded automatically.
 
 ## Validation
 
 ```powershell
+python -m compileall -q bot_manager.py tests
 python -m unittest discover -s tests -v
-python -m py_compile bot_manager.py
 ```
 
-The regression suite exercises launcher classification, structured health selection, process identity, persistence boundaries, status reporting, control safeguards, metadata handling, and atomic diagnostics.
+The deterministic suite uses synthetic folders and mocked process inventories. It does not start child automation, contact network services, or modify system security settings.
 
-## Project status
+## Portfolio context
 
-Version 1.13.0 is a Windows-first source release. Process discovery and launcher behavior depend on Windows command and PowerShell semantics. Test fixtures isolate state and do not launch production automation.
+This public edition excludes private builds, cloud-folder mappings, real operational project names, binaries, runtime state, logs, and generated support bundles. The repository demonstrates defensive local orchestration, evidence-ranked health monitoring, redaction, bounded recovery, and fail-closed control boundaries.
 
-The source retains a few legacy `project-internal` and private-vault labels because they are compatibility fields in the v1.13 diagnostic schema and regression fixtures. This public edition contains no Drive identifiers, credentials, or private operational exports.
-
-## License
-
-Copyright 2026 Gateway Information Group LLC. Source is shared for portfolio review under the terms in [LICENSE.md](LICENSE.md). Third-party components, if introduced by a downstream user, retain their own licenses.
+Copyright © 2026 Gateway Information Group LLC. All rights reserved. See [LICENSE.md](LICENSE.md).
