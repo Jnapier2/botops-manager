@@ -6,6 +6,8 @@ BotOps Manager is a local Windows operations console that brings independently l
 
 It centralizes launcher-safety audits, health evidence, process ownership, and privacy-conscious support exports. Control remains limited to verified, project-scoped actions; child credentials and application logic remain untouched.
 
+The operational distinction is deliberate: observation can span the workspace, but control is granted only when launcher safety and process identity are re-established at the moment of action. This reduces the risk of stale discovery data or a reused PID enabling unintended process control.
+
 ## Operational safeguards
 
 - **Fail-closed launcher selection:** setup, build, cleanup, export, test, broad-stop, and other unsafe candidates are blocked from automatic start selection; incomplete directory scans preserve prior registry and ownership state.
@@ -39,6 +41,8 @@ python bot_manager.py --root "C:\path\to\automation" menu
 ```
 
 The default root is `C:\Bots`. Use `--root` to inspect another directory without persisting that override.
+
+That root is the primary operating boundary: discovery, registry checks, and control decisions remain scoped beneath it.
 
 ## Support export
 
