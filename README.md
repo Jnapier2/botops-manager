@@ -2,9 +2,9 @@
 
 [![Tests](https://github.com/Jnapier2/botops-manager/actions/workflows/test.yml/badge.svg)](https://github.com/Jnapier2/botops-manager/actions/workflows/test.yml)
 
-A safety-first local operations console for monitoring and controlling independent Windows automation folders.
+BotOps Manager is a local Windows operations console that brings independently launched automation into one observable workspace without granting broad process authority.
 
-BotOps Manager turns a directory of separately launched tools into one observable workspace. It discovers candidate launchers, scores their safety, reads structured health contracts, tracks process identity, and creates privacy-conscious support exports without reading application credentials or changing child-project logic.
+It centralizes launcher-safety audits, health evidence, process ownership, and privacy-conscious support exports. Control remains limited to verified, project-scoped actions; child credentials and application logic remain untouched.
 
 ## Operational safeguards
 
