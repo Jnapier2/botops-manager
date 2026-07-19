@@ -6,7 +6,7 @@ A safety-first local operations console for monitoring and controlling independe
 
 BotOps Manager turns a directory of separately launched tools into one observable workspace. It discovers candidate launchers, scores their safety, reads structured health contracts, tracks process identity, and creates privacy-conscious support exports without reading application credentials or changing child-project logic.
 
-## Engineering highlights
+## Operational safeguards
 
 - **Fail-closed launcher selection:** setup, build, cleanup, export, test, broad-stop, and other unsafe candidates are blocked from automatic start selection; incomplete directory scans preserve prior registry and ownership state.
 - **Re-audited process control:** start and project-scoped stop scripts are rechecked for containment, file type, role, and score immediately before launch.
@@ -19,7 +19,9 @@ BotOps Manager turns a directory of separately launched tools into one observabl
 
 BotOps is monitor-only for externally started processes by default. It does not read child-project credentials, call external services on their behalf, edit their source or configuration, install persistence, weaken endpoint protection, or restart a project automatically.
 
-Start and stop-script actions are explicit and confirmation-gated. Duplicate checks require an explicitly complete Windows process inventory. BotOps records start ownership only when the launched process remains live and the same PID and creation identity are verified both immediately and after the settle window. Force termination is deliberately disabled because a persisted PID alone cannot eliminate Windows process-reuse and time-of-check/time-of-use risk.
+Start and stop-script actions are explicit and confirmation-gated. Duplicate checks require an explicitly complete Windows process inventory.
+
+BotOps records start ownership only when the launched process remains live and the same PID and creation identity are verified both immediately and after the settle window. Force termination remains disabled because a persisted PID alone cannot eliminate Windows process-reuse and time-of-check/time-of-use risk.
 
 ## Quick start
 
@@ -44,7 +46,9 @@ The default root is `C:\Bots`. Use `--root` to inspect another directory without
 python bot_manager.py --root "C:\path\to\automation" export
 ```
 
-The export contains bounded status, launcher-audit, health-audit, self-test, and redacted state summaries. Child-project log bodies are excluded; a byte-bounded, redacted manager-log tail is included only when one already exists. Per-entry and total byte limits, Windows-safe archive names, descriptor-bound staging, no-overwrite publication, and link/reparse checks are enforced. Review every ZIP before sharing it; no support bundle is uploaded automatically.
+Each export contains bounded status, launcher-audit, health-audit, self-test, and redacted state summaries. Child-project log bodies remain excluded; a byte-bounded, redacted manager-log tail is included only when one already exists.
+
+The exporter enforces per-entry and total byte limits, Windows-safe archive names, descriptor-bound staging, no-overwrite publication, and link/reparse checks. It never uploads a support bundle; review each ZIP before sharing it.
 
 ## Validation
 
