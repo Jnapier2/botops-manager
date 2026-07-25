@@ -2,6 +2,8 @@
 
 [![Tests](https://github.com/Jnapier2/botops-manager/actions/workflows/test.yml/badge.svg)](https://github.com/Jnapier2/botops-manager/actions/workflows/test.yml)
 
+[Portfolio](https://jerry-napier-portfolio.netlify.app/) · [GitHub profile](https://github.com/Jnapier2)
+
 BotOps Manager is a local Windows operations console that brings independently launched automation into one observable workspace without granting broad process authority.
 
 It centralizes launcher-safety audits, health evidence, process ownership, and privacy-conscious support exports. Control remains limited to verified, project-scoped actions; child credentials and application logic remain untouched.
