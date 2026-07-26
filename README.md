@@ -8,7 +8,7 @@ BotOps Manager is a local Windows operations console that brings independently l
 
 It centralizes launcher-safety audits, health evidence, process ownership, and privacy-conscious support exports. Control remains limited to verified, project-scoped actions; child credentials and application logic remain untouched.
 
-BotOps inspects candidate projects it can successfully discover beneath its configured root, but it controls only launchers and processes whose safety and identity it verifies again at execution time. Inaccessible folders and incomplete scans are reported or fail closed; they are not counted as observed projects. Stale discovery data and persisted PIDs are never accepted on their own as authority to act.
+BotOps inspects candidate projects it can successfully discover beneath its configured root. When a scan is incomplete, it preserves the prior registry rather than silently replacing it; those retained records are historical discovery evidence, not proof that the projects were freshly observed. BotOps controls only launchers and processes whose safety and identity it verifies again at execution time. Stale discovery data and persisted PIDs are never accepted on their own as authority to act.
 
 ## Operational safeguards
 
