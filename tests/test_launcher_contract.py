@@ -17,6 +17,8 @@ class LauncherContractTests(unittest.TestCase):
         self.assertIn('cd /d "%~dp0"', lower)
         self.assertIn("bot_manager.py", lower)
         self.assertRegex(lower, r'botops_script%"\s+menu')
+        self.assertIn('"%botops_script%" %*', lower)
+        self.assertNotIn('set "botops_command=', lower)
         self.assertNotIn("choice /c", lower)
         self.assertNotRegex(lower, r"(?m)^\s*:menu\b")
         self.assertNotIn("dashboard / current status", lower)
