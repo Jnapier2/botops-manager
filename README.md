@@ -42,6 +42,8 @@ For the interactive dashboard, run `BotOps_Manager.bat` or:
 python bot_manager.py --root "C:\path\to\automation" menu
 ```
 
+`BotOps_Manager.bat` is intentionally a thin, root-relative shim. It prefers the project-local virtual environment, locates a compatible Python runtime when needed, and delegates directly to the Python `menu` command. Menu and version logic are maintained only in `bot_manager.py`.
+
 The default root is `C:\Bots`. Use `--root` to inspect another directory without persisting that override.
 
 That root is the primary operating boundary: discovery, registry checks, and control decisions remain scoped beneath it.
