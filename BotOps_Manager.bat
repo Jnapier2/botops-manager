@@ -38,7 +38,7 @@ if not defined BOTOPS_RUNNER (
         python -c "import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)" >nul 2>&1
         if not errorlevel 1 (
             set "BOTOPS_RUNNER=PYTHON"
-            set "BOTOPS_PYTHON=python"
+            set "BOTOPS_PYTHON=python.exe"
         )
     )
 )
@@ -50,9 +50,12 @@ if not defined BOTOPS_RUNNER (
     exit /b 3
 )
 
+set "BOTOPS_COMMAND=menu"
+if not "%~1"=="" set "BOTOPS_COMMAND=%*"
+
 if "%BOTOPS_RUNNER%"=="PYLAUNCHER" (
-    py -3 "%BOTOPS_SCRIPT%" menu
+    py -3 "%BOTOPS_SCRIPT%" %BOTOPS_COMMAND%
 ) else (
-    "%BOTOPS_PYTHON%" "%BOTOPS_SCRIPT%" menu
+    "%BOTOPS_PYTHON%" "%BOTOPS_SCRIPT%" %BOTOPS_COMMAND%
 )
 exit /b %errorlevel%
