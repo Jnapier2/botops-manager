@@ -32,9 +32,14 @@ jobs:
         run: |
           $caller = Join-Path $env:RUNNER_TEMP 'botops-foreign-cwd'
           New-Item -ItemType Directory -Path $caller -Force | Out-Null
-          $command = '"{0}\BotOps_Manager.bat" --root "{0}" config' -f $env:GITHUB_WORKSPACE
-          $process = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/c',$command) -WorkingDirectory $caller -NoNewWindow -Wait -PassThru
-          if ($process.ExitCode -ne 0) { throw "BotOps launcher smoke failed with exit code $($process.ExitCode)." }
+          Push-Location $caller
+          try {
+            & "$env:GITHUB_WORKSPACE\BotOps_Manager.bat" --root $env:GITHUB_WORKSPACE config
+            $launchExit = $LASTEXITCODE
+          } finally {
+            Pop-Location
+          }
+          if ($launchExit -ne 0) { throw "BotOps launcher smoke failed with exit code $launchExit." }
           if (Test-Path -LiteralPath (Join-Path $caller 'state')) { throw 'BotOps wrote state under the caller working directory.' }
 
 # Copyright © 2026 Gateway Information Group LLC. All rights reserved.
