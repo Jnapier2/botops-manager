@@ -27,5 +27,19 @@ jobs:
         run: python -m py_compile bot_manager.py
       - name: Run regression suite
         run: python -m unittest discover -s tests -v
+      - name: Launch from an unrelated working directory
+        shell: pwsh
+        run: |
+          $caller = Join-Path $env:RUNNER_TEMP 'botops-foreign-cwd'
+          New-Item -ItemType Directory -Path $caller -Force | Out-Null
+          Push-Location $caller
+          try {
+            & "$env:GITHUB_WORKSPACE\BotOps_Manager.bat" --root $env:GITHUB_WORKSPACE config
+            $launchExit = $LASTEXITCODE
+          } finally {
+            Pop-Location
+          }
+          if ($launchExit -ne 0) { throw "BotOps launcher smoke failed with exit code $launchExit." }
+          if (Test-Path -LiteralPath (Join-Path $caller 'state')) { throw 'BotOps wrote state under the caller working directory.' }
 
 # Copyright © 2026 Gateway Information Group LLC. All rights reserved.

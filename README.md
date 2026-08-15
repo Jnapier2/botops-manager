@@ -42,11 +42,18 @@ For the interactive dashboard, run `BotOps_Manager.bat` or:
 python bot_manager.py --root "C:\path\to\automation" menu
 ```
 
-`BotOps_Manager.bat` is intentionally a thin, root-relative shim. It prefers the project-local virtual environment, locates a compatible Python runtime when needed, and delegates directly to the Python `menu` command. Menu and version logic are maintained only in `bot_manager.py`.
+`BotOps_Manager.bat` is intentionally a thin, root-relative shim. It prefers the project-local virtual environment, locates a compatible Python runtime when needed, and opens the Python `menu` command when no arguments are supplied. Additional arguments are forwarded unchanged to `bot_manager.py`, so the same canonical launcher can run maintenance commands such as:
+
+```powershell
+.\BotOps_Manager.bat --root "C:\path\to\automation" selftest
+.\BotOps_Manager.bat --root "C:\path\to\automation" config
+```
+
+Menu and version logic are maintained only in `bot_manager.py`.
 
 The default root is `C:\Bots`. Use `--root` to inspect another directory without persisting that override.
 
-That root is the primary operating boundary: discovery, registry checks, and control decisions remain scoped beneath it.
+That root is the primary operating boundary: discovery, registry checks, and control decisions remain scoped beneath it. BotOps resolves its own config, state, logs, status, metrics, and exports from the project location rather than the caller's working directory.
 
 ## Support export
 
@@ -65,6 +72,6 @@ python -m compileall -q bot_manager.py tests
 python -m unittest discover -s tests -v
 ```
 
-The deterministic suite uses synthetic folders and mocked process inventories. It does not start child automation, contact network services, or modify system security settings.
+The deterministic suite uses synthetic folders and mocked process inventories. It does not start child automation, contact network services, or modify system security settings. Windows CI also invokes the canonical BAT from an unrelated working directory and verifies that no state is written there.
 
 Copyright © 2026 Gateway Information Group LLC. All rights reserved. See [LICENSE.md](LICENSE.md).
