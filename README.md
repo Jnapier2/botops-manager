@@ -55,6 +55,22 @@ The default root is `C:\Bots`. Use `--root` to inspect another directory without
 
 That root is the primary operating boundary: discovery, registry checks, and control decisions remain scoped beneath it. BotOps resolves its own config, state, logs, status, metrics, and exports from the project location rather than the caller's working directory.
 
+## Try the launcher audit
+
+From a fresh copy of the public source, create two fictional projects and audit their launchers.
+
+```powershell
+$reviewRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("botops-review-" + [guid]::NewGuid().ToString("N"))
+$start = Join-Path $reviewRoot "PaperQueue"
+$diagnostics = Join-Path $reviewRoot "DiagnosticOnly"
+New-Item -ItemType Directory -Path $start, $diagnostics -Force | Out-Null
+'@echo off', 'echo Synthetic start fixture only' | Set-Content -Encoding ASCII -LiteralPath (Join-Path $start "Start_PaperQueue.bat")
+'@echo off', 'echo Synthetic export fixture only' | Set-Content -Encoding ASCII -LiteralPath (Join-Path $diagnostics "Export_Diagnostics.bat")
+python bot_manager.py --root $reviewRoot audit
+```
+
+The audit marks `PaperQueue` as a safe start candidate and shows `DiagnosticOnly` as requiring review because its export script is ineligible for automatic start selection. The audit records its findings in the manager's registry without launching either script.
+
 ## Support export
 
 ```powershell
